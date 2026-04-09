@@ -21,7 +21,7 @@ const Register: React.FC = () => {
 
   return (
     <main className="flex min-h-screen bg-surface font-body text-on-surface antialiased">
-      {/* SECCIÓN IZQUIERDA: Editorial (Visible en LG+) */}
+     
       <section className="hidden lg:flex w-1/2 relative overflow-hidden bg-primary">
         <div className="absolute inset-0 z-0">
           <img
@@ -56,17 +56,15 @@ const Register: React.FC = () => {
         </div>
       </section>
 
-      {/* SECCIÓN DERECHA: Formulario de Registro */}
       <section className="w-full lg:w-1/2 flex items-center justify-center bg-surface px-6 md:px-16 lg:px-24 py-12">
         <div className="w-full max-w-md space-y-10">
-          {/* Brand Header (Mobile Only) */}
+        
           <div className="lg:hidden text-center">
             <h1 className="text-3xl font-headline font-bold tracking-tighter text-primary">
               ModaGlobal
             </h1>
           </div>
 
-          {/* Form Heading */}
           <div className="space-y-4">
             <h2 className="text-3xl font-headline font-bold text-primary tracking-tight">
               Crear cuenta

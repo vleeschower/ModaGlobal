@@ -68,7 +68,7 @@ const Home: React.FC = () => {
           </div>
         </section>
 
-        {/* Daily Offers Section */}
+        {/* Sección ofertas  */}
         <section className="pb-20 px-6 md:px-16 bg-[#F8F9FA]">
           <div className="max-w-[1440px] mx-auto">
             <div className="flex justify-between items-end mb-10">
@@ -215,10 +215,9 @@ const Home: React.FC = () => {
                     alt={tech.title} 
                     className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700"
                   />
-                  {/* Overlay para legibilidad */}
+   
                   <div className="absolute inset-0 bg-black/20 group-hover:bg-black/40 transition-colors duration-300"></div>
                   
-                  {/* Contenido centrado o inferior dependiendo del diseño de la imagen */}
                   <div className="absolute inset-0 p-6 flex flex-col justify-end items-start text-white">
                     
                     <div className="flex items-center gap-2 mb-1">
