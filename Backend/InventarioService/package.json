@@ -12,13 +12,21 @@
   "author": "",
   "license": "ISC",
   "dependencies": {
+    "@azure/service-bus": "^7.9.5",
     "cors": "^2.8.6",
-    "express": "^5.2.1"
+    "dotenv": "^17.4.2",
+    "express": "^5.2.1",
+    "mssql": "^12.3.0",
+    "uuid": "^13.0.0",
+    "winston": "^3.19.0",
+    "xss": "^1.0.15"
   },
   "devDependencies": {
     "@types/cors": "^2.8.19",
     "@types/express": "^5.0.6",
+    "@types/mssql": "^9.1.11",
     "@types/node": "^25.5.2",
+    "@types/uuid": "^11.0.0",
     "ts-node": "^10.9.2",
     "typescript": "^6.0.2"
   }
