@@ -9,10 +9,10 @@ const forenseFormat = winston.format.combine(
 export const logger = winston.createLogger({
     level: 'info',
     format: forenseFormat,
-    defaultMeta: { servicio: 'InventarioService' },
+    defaultMeta: { servicio: 'ProductoService' },
     transports: [
         new winston.transports.File({ 
-            filename: path.join(__dirname, '../../logs/inventarios_evidencia.log'),
+            filename: path.join(__dirname, '../../logs/productos_evidencia.log'),
             level: 'info' 
         }),
         new winston.transports.Console({
