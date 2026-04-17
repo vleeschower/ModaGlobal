@@ -54,3 +54,9 @@
 {"level":"info","message":"✅ Stock inicial procesado para producto prod-e0528f9b en tienda tnd-chiapas-01","servicio":"InventarioService","timestamp":"2026-04-16T14:29:26Z"}
 {"level":"info","message":"✅ Stock inicial procesado para producto prod-581d6905 en tienda tnd-chiapas-01","servicio":"InventarioService","timestamp":"2026-04-16T14:29:35Z"}
 {"level":"info","message":"✅ Stock inicial procesado para producto prod-e345ae87 en tienda tnd-chiapas-01","servicio":"InventarioService","timestamp":"2026-04-16T15:18:14Z"}
+{"level":"info","message":"📦 InventoryService iniciado en puerto 3001","servicio":"InventarioService","timestamp":"2026-04-17T01:19:17Z"}
+{"level":"info","message":"🎧 Inventario escuchando eventos en Tópico: tienda.productos | Sub: sub-inventarios","servicio":"InventarioService","timestamp":"2026-04-17T01:19:17Z"}
+{"level":"info","message":"Conexión establecida exitosamente con el Pool de Azure SQL.","servicio":"InventarioService","timestamp":"2026-04-17T01:19:18Z"}
+{"level":"info","message":"📦 InventoryService iniciado en puerto 3001","servicio":"InventarioService","timestamp":"2026-04-17T01:28:38Z"}
+{"level":"info","message":"🎧 Inventario escuchando eventos en Tópico: tienda.productos | Sub: sub-inventarios","servicio":"InventarioService","timestamp":"2026-04-17T01:28:38Z"}
+{"level":"info","message":"Conexión establecida exitosamente con el Pool de Azure SQL.","servicio":"InventarioService","timestamp":"2026-04-17T01:28:39Z"}
