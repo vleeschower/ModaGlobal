@@ -36,7 +36,7 @@ const UsersDashboard: React.FC = () => {
             {/* Tabla de Usuarios */}
             <section className="bg-white rounded-3xl shadow-sm border border-gray-200 overflow-hidden">
             <div className="overflow-x-auto">
-                <table className="w-full text-left min-w-[700px]">
+                <table className="w-full text-left min-w-700px">
                 <thead className="bg-surface-container-low border-b border-gray-200">
                     <tr>
                     <th className="px-8 py-5 text-[10px] uppercase tracking-widest text-gray-500 font-bold">Nombre</th>
