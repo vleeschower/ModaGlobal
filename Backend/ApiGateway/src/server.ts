@@ -76,6 +76,7 @@ const limitadorSeguridad = rateLimit({
 // --- ASIGNACIÓN DE RUTAS ---
 
 // 1. PRIMERO: Aplicamos el Rate Limit SOLO a las rutas sensibles (mutaciones)
+<<<<<<< HEAD
 // Como el limitador llama a next() si todo está bien, la petición continuará su camino.
 app.post('/api/productos/nuevo', limitadorSeguridad);
 app.post('/api/productos/promociones', limitadorSeguridad);
@@ -93,6 +94,27 @@ app.use('/api/productos', validarAccesoGoblal, createProxyMiddleware(productoPro
 // Rutas futuras (Sigue el mismo patrón)
 // app.use('/api/usuarios', ...); 
 // app.use('/api/ventas', validarAccesoGoblal, ...);
+=======
+// Esto está perfecto. Fíjate que le pasamos el limitador como si fuera un middleware.
+app.use('/api/productos/nuevo', limitadorSeguridad);
+app.use('/api/productos/promociones', limitadorSeguridad);
+app.use('/api/productos/proveedores/vincular', limitadorSeguridad);
+app.use('/api/productos/resenas', limitadorSeguridad); // Buena idea limitar la creación de reseñas para evitar SPAM
+
+// BORRA ESTAS LÍNEAS (Eran el problema):
+// app.get('/api/productos/'); 
+// app.get('/api/productos/:id/resenas'); 
+// app.post('/api/productos/resenas'); 
+// app.get('/api/productos/:id'); 
+
+
+// 2. SEGUNDO: El Proxy General
+// El proxy atrapa TODO lo que empiece con /api/productos y lo manda al microservicio.
+// Por ejemplo: Si el front pide GET /api/productos/123, el proxy lo agarra y
+// lo manda como GET /123 al microservicio en el puerto 3002.
+app.use('/api/inventario', validarAccesoGoblal, createProxyMiddleware(inventarioProxyOptions));
+app.use('/api/productos', validarAccesoGoblal, createProxyMiddleware(productoProxyOptions));
+>>>>>>> franco-branch
 
 app.listen(PORT, () => {
     console.log(`[API Gateway] Fortaleza iniciada en puerto ${PORT}`);

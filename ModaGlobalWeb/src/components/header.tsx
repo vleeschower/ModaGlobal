@@ -2,7 +2,11 @@ import React, { useState } from 'react';
 import { Link } from 'react-router-dom'; 
 import logoImg from '../assets/logom.png';
 
-const Header: React.FC = () => {
+interface HeaderProps {
+  toggleSidebar?: () => void;
+}
+
+const Header: React.FC<HeaderProps> = ({ toggleSidebar }) => {
   const [isOpen, setIsOpen] = useState(false);
 
   const navLinks = [
@@ -13,7 +17,7 @@ const Header: React.FC = () => {
   ];
 
   return (
-    <nav className="sticky top-0 w-full z-50 shadow-xl shadow-emerald-950/20 bg-primary">
+    <nav className="sticky top-0 w-full z-50 shadow-lg shadow-primary/20 bg-primary">
       <div className="flex justify-between items-center px-4 md:px-8 py-3 max-w-1440px mx-auto gap-2 md:gap-8">
         
         <div className="flex items-center shrink-0">
@@ -34,7 +38,7 @@ const Header: React.FC = () => {
           {navLinks.map((link) => (
             <a 
               key={link.name}
-              className="text-slate-200/80 hover:text-white transition-colors whitespace-nowrap" 
+              className="text-gray-300 hover:text-primary-esmeralda transition-colors whitespace-nowrap" 
               href={link.href}
             >
               {link.name}
@@ -44,11 +48,11 @@ const Header: React.FC = () => {
 
         <div className="flex-1 max-w-xl hidden md:block">
           <div className="relative group">
-            <span className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-white/80 group-focus-within:text-white transition-colors">
+            <span className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 group-focus-within:text-white transition-colors">
               search
             </span>
             <input 
-              className="w-full bg-white/20 border-none rounded-full py-2 pl-10 pr-4 text-white placeholder:text-white/70 focus:ring-2 focus:ring-white/40 focus:bg-white/30 transition-all text-sm outline-none" 
+              className="w-full bg-white/10 border-none rounded-full py-2 pl-10 pr-4 text-white placeholder:text-gray-400 focus:ring-2 focus:ring-primary-esmeralda focus:bg-white/20 transition-all text-sm outline-none" 
               placeholder="Buscar productos..." 
               type="text" 
             />
@@ -57,13 +61,13 @@ const Header: React.FC = () => {
 
         <div className="flex items-center gap-1 md:gap-4 text-white shrink-0">
           
-          <button className="p-2 hover:bg-white/10 rounded-full transition-transform active:scale-90 relative">
+          <button className="p-2 hover:bg-white/10 hover:text-primary-esmeralda rounded-full transition-all active:scale-90 relative">
             <span className="material-symbols-outlined text-2xl">shopping_cart</span>
           </button>
 
           <Link 
             to="/login" 
-            className="p-2 hover:bg-white/10 rounded-full transition-transform active:scale-90 flex items-center justify-center"
+            className="p-2 hover:bg-white/10 hover:text-primary-esmeralda rounded-full transition-all active:scale-90 flex items-center justify-center"
             title="Iniciar sesión"
           >
             <span className="material-symbols-outlined text-2xl">person</span>
@@ -83,18 +87,18 @@ const Header: React.FC = () => {
 
       {/* MENÚ MÓVIL */}
       <div className={`
-        lg:hidden overflow-hidden transition-all duration-300 ease-in-out bg-emerald-950
+        lg:hidden overflow-hidden transition-all duration-300 ease-in-out bg-primary
         ${isOpen ? 'max-h-500px border-t border-white/10' : 'max-h-0'}
       `}>
         <div className="flex flex-col p-6 gap-6">
           
           {/* Barra de búsqueda móvil */}
           <div className="md:hidden relative">
-            <span className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-white/60">
+            <span className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-gray-400">
               search
             </span>
             <input 
-              className="w-full bg-white/10 border border-white/10 rounded-xl py-3 pl-10 pr-4 text-white placeholder:text-white/50 text-sm outline-none" 
+              className="w-full bg-white/10 border border-white/10 rounded-xl py-3 pl-10 pr-4 text-white placeholder:text-gray-400 text-sm outline-none focus:border-primary-esmeralda transition-colors" 
               placeholder="¿Qué estás buscando?" 
               type="text" 
             />
@@ -105,7 +109,7 @@ const Header: React.FC = () => {
               <a 
                 key={link.name}
                 href={link.href}
-                className="text-slate-200 text-2lg font-medium hover:text-white transition-colors py-2 border-b border-white/5"
+                className="text-gray-300 text-lg font-medium hover:text-primary-esmeralda transition-colors py-2 border-b border-white/5"
                 onClick={() => setIsOpen(false)}
               >
                 {link.name}
@@ -113,7 +117,7 @@ const Header: React.FC = () => {
             ))}
             <Link 
               to="/login"
-              className="text-primary-esmeralda text-2lg font-bold py-2"
+              className="text-primary-esmeralda text-lg font-bold py-2 hover:text-emerald-400 transition-colors"
               onClick={() => setIsOpen(false)}
             >
               Iniciar sesión

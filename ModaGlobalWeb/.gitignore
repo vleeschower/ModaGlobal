@@ -11,6 +11,15 @@ yarn-error.log*
 pnpm-debug.log*
 lerna-debug.log*
 
+<<<<<<< HEAD
+=======
+node_modules
+dist
+dist-ssr
+*.local
+.env
+
+>>>>>>> franco-branch
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json

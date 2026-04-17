@@ -17,6 +17,7 @@ const Home: React.FC = () => {
     { title: 'Smartwatches', icon: 'watch', img: 'https://images.unsplash.com/photo-1544117519-31a4b719223d?q=80&w=1000&auto=format&fit=crop' },
     { title: 'Audio Hi-Fi', img: 'https://images.unsplash.com/photo-1546435770-a3e426bf472b?q=80&w=1000&auto=format&fit=crop' }
   ];
+  
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const toggleSidebar = () => setIsSidebarOpen(!isSidebarOpen);
 
@@ -33,6 +34,7 @@ const Home: React.FC = () => {
               className="w-full h-full object-cover"
               src={imagenHome}
             />
+            {/* Usamos el color 'primary' oscuro de nuestra paleta para el degradado */}
             <div className="absolute inset-0 bg-linear-to-r from-primary/90 via-primary/80 to-transparent"></div>
           </div>
           <div className="relative z-10 max-w-1440px mx-auto px-6 md:px-16 w-full">
@@ -41,7 +43,8 @@ const Home: React.FC = () => {
                 Lo mejor del mundo, <br />
                 <span className="text-primary-esmeralda">variedad para tu estilo.</span>
               </h1>
-              <button className="bg-primary-esmeralda text-white px-6 py-3 rounded-md font-bold flex items-center gap-3 hover:bg-primary transition-all group text-sm md:text-base">
+              {/* Botón con hover estandarizado */}
+              <button className="bg-primary-esmeralda text-white px-6 py-3 rounded-md font-bold flex items-center gap-3 hover:bg-emerald-400 transition-all group text-sm md:text-base shadow-lg">
                 Comprar ahora
                 <span className="material-symbols-outlined group-hover:translate-x-1 transition-transform">arrow_forward</span>
               </button>
@@ -49,8 +52,8 @@ const Home: React.FC = () => {
           </div>
         </header>
 
-        {/* Info Cards */}
-        <section className="bg-surface-container-low py-20 px-6 md:px-16">
+        {/* Info Cards - Fondo gris claro */}
+        <section className="bg-surface-container-low py-20 px-6 md:px-16 border-b border-gray-100">
           <div className="max-w-1440px mx-auto grid grid-cols-1 md:grid-cols-3 gap-8">
             {[
               { icon: 'store', title: 'Recoger en tienda', desc: 'Compra online y recoge lo antes posible' },
@@ -58,30 +61,33 @@ const Home: React.FC = () => {
               { icon: 'verified_user', title: 'Garantía total', desc: 'Protección en cada compra' }
             ].map((item, i) => (
               <div key={i} className="flex items-center gap-4">
-                <div className="bg-primary/10 p-3 rounded-full text-primary">
+                <div className="bg-primary/10 p-3 rounded-full text-primary-esmeralda">
                   <span className="material-symbols-outlined text-2xl">{item.icon}</span>
                 </div>
                 <div>
-                  <h3 className="font-bold">{item.title}</h3>
-                  <p className="text-sm text-secondary">{item.desc}</p>
+                  <h3 className="font-bold text-slate-800">{item.title}</h3>
+                  <p className="text-sm text-gray-500">{item.desc}</p>
                 </div>
               </div>
             ))}
           </div>
         </section>
 
-        {/* Sección ofertas  */}
-        <section className="pb-20 px-6 md:px-16 bg-[#F8F9FA]">
+        {/* Sección ofertas - Fondo blanco para alternar */}
+        <section className="py-20 px-6 md:px-16 bg-surface">
           <div className="max-w-1440px mx-auto">
             <div className="flex justify-between items-end mb-10">
               <h2 className="text-2xl md:text-3xl font-headline font-bold text-slate-900">Ofertas del día</h2>
-              <a href="#" className="text-sm font-bold text-primary flex items-center gap-1">Ver todo <span className="material-symbols-outlined text-sm">arrow_forward</span></a>
+              <a href="#" className="text-sm font-bold text-primary-esmeralda hover:text-emerald-400 transition-colors flex items-center gap-1">
+                Ver todo <span className="material-symbols-outlined text-sm">arrow_forward</span>
+              </a>
             </div>
             
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
               {offers.map((product) => (
-                <div key={product.id} className="group bg-white rounded-3xl overflow-hidden hover:shadow-md transition-shadow duration-300 border border-gray-100">
-                  <div className="aspect-4/3 bg-[#E9ECEF] relative overflow-hidden">
+                <div key={product.id} className="group bg-white rounded-3xl overflow-hidden hover:shadow-xl transition-all duration-300 border border-gray-100">
+                  {/* Aquí aplicamos el container-high en lugar del hex manual */}
+                  <div className="aspect-4/3 bg-surface-container-high relative overflow-hidden">
                     <img 
                       src={product.img} 
                       alt={product.name}
@@ -97,7 +103,7 @@ const Home: React.FC = () => {
                     </div>
                     <p className="text-gray-400 text-xs mb-4">{product.desc}</p>
                     <div className="flex items-center gap-2">
-                      <span className="text-primary-esmeralda font-bold text-lg">${product.price.toFixed(2)}</span>
+                      <span className="text-primary-esmeralda font-black text-lg">${product.price.toFixed(2)}</span>
                       <span className="text-gray-400 line-through text-xs">${product.oldPrice.toFixed(2)}</span>
                     </div>
                   </div>
@@ -107,8 +113,8 @@ const Home: React.FC = () => {
           </div>
         </section>
 
-        {/* Banner Section: Urban Sneaker Revolution */}
-        <section className="pb-20 px-6 md:px-16 bg-[#F8F9FA]">
+        {/* Banner Section - Fondo gris claro */}
+        <section className="py-20 px-6 md:px-16 bg-surface-container-low">
           <div className="max-w-1440px mx-auto">
             <div className="relative w-full h-450px md:h-500px rounded-3xl overflow-hidden shadow-2xl">
               <img 
@@ -116,24 +122,24 @@ const Home: React.FC = () => {
                 alt="Urban Sneaker"
                 className="absolute inset-0 w-full h-full object-cover"
               />
-              <div className="absolute inset-0 bg-linear-to-t from-black/80 via-black/20 to-transparent"></div>
+              <div className="absolute inset-0 bg-linear-to-t from-primary/90 via-primary/40 to-transparent"></div>
               
               <div className="absolute inset-0 flex flex-col justify-end p-8 md:p-16">
                 <div className="max-w-2xl">
-                  <span className="text-emerald-400 font-bold text-xs md:text-sm tracking-widest uppercase mb-4 block">
+                  <span className="text-primary-esmeralda font-bold text-xs md:text-sm tracking-widest uppercase mb-4 block">
                     Nueva Edición Limitada
                   </span>
                   <h2 className="text-white text-4xl md:text-6xl font-extrabold font-headline leading-none mb-6">
                     Urban Sneaker <br /> Revolution
                   </h2>
-                  <p className="text-gray-300 text-sm md:text-base max-w-lg mb-8 leading-relaxed">
+                  <p className="text-gray-200 text-sm md:text-base max-w-lg mb-8 leading-relaxed">
                     Diseño audaz para el explorador urbano. Experimenta el confort supremo fusionado con la estética de vanguardia.
                   </p>
                   <div className="flex flex-wrap items-center gap-6">
-                    <button className="bg-primary text-white px-8 py-3 rounded-lg font-bold hover:bg-primary-esmeralda transition-colors">
+                    <button className="bg-primary-esmeralda text-white px-8 py-3 rounded-lg font-bold hover:bg-emerald-400 transition-colors">
                       Explorar colección
                     </button>
-                    <button className="text-white font-bold flex items-center gap-2 group">
+                    <button className="text-white font-bold flex items-center gap-2 group hover:text-gray-200 transition-colors">
                       Ver catálogo 
                       <span className="material-symbols-outlined group-hover:translate-x-1 transition-transform">arrow_right_alt</span>
                     </button>
@@ -144,68 +150,64 @@ const Home: React.FC = () => {
           </div>
         </section>
 
-        <section className="pb-20 px-6 md:px-16 bg-[#F8F9FA]">
+        {/* Tendencias - Fondo blanco */}
+        <section className="py-20 px-6 md:px-16 bg-surface">
           <div className="max-w-1440px mx-auto text-center mb-12">
-            <span className="text-[12px] font-bold tracking-[0.2em] uppercase text-gray-500 block mb-2">Tendencias 2026</span>
+            <span className="text-[12px] font-bold tracking-[0.2em] uppercase text-gray-400 block mb-2">Tendencias 2026</span>
             <h2 className="text-3xl md:text-4xl font-black font-headline text-slate-900">Estilo para cada día</h2>
           </div>
 
           <div className="max-w-1440px mx-auto grid grid-cols-1 md:grid-cols-12 gap-6 h-auto md:h-700px">
-            
-            {/* Card Grande: Colección Otoño/Invierno */}
+            {/* Card Grande */}
             <div className="md:col-span-7 relative rounded-3xl overflow-hidden group shadow-lg">
               <img 
                 src="https://images.pexels.com/photos/29493395/pexels-photo-29493395/free-photo-of-modelado-en-nieve.jpeg" 
                 alt="Otoño Invierno" 
                 className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700"
               />
-              <div className="absolute inset-0 bg-linear-to-t from-black/70 via-transparent to-transparent"></div>
+              <div className="absolute inset-0 bg-linear-to-t from-primary/80 via-transparent to-transparent"></div>
               <div className="absolute bottom-0 left-0 p-8 md:p-12 text-white">
                 <h3 className="text-3xl md:text-4xl font-bold mb-2">Colección otoño/invierno</h3>
-                <p className="text-gray-300 text-sm mb-6 max-w-sm">Piezas atemporales diseñadas para durar.</p>
-                <a href="#" className="inline-block border-b-2 border-white pb-1 font-bold text-sm hover:text-primary-esmeralda hover:border-primary-esmeralda transition-all">Ver prendas</a>
+                <p className="text-gray-200 text-sm mb-6 max-w-sm">Piezas atemporales diseñadas para durar.</p>
+                <a href="#" className="inline-block border-b-2 border-primary-esmeralda pb-1 font-bold text-sm text-primary-esmeralda hover:text-emerald-400 hover:border-emerald-400 transition-all">Ver prendas</a>
               </div>
             </div>
 
             {/* Columna de Cards Pequeñas */}
             <div className="md:col-span-5 flex flex-col gap-6">
-              
-              {/* Card Superior: Básicos Modernos */}
               <div className="relative flex-1 rounded-3xl overflow-hidden group shadow-lg">
                 <img 
                   src="https://images.unsplash.com/photo-1490114538077-0a7f8cb49891?q=80&w=1000&auto=format&fit=crop" 
                   alt="Básicos" 
                   className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700"
                 />
-                <div className="absolute inset-0 bg-black/20 group-hover:bg-black/40 transition-colors"></div>
+                <div className="absolute inset-0 bg-primary/20 group-hover:bg-primary/40 transition-colors"></div>
                 <div className="absolute bottom-0 left-0 p-8 text-white">
                   <h3 className="text-xl md:text-2xl font-bold mb-1">Básicos modernos</h3>
-                  <p className="text-gray-200 text-xs">$300 - $500</p>
-                         <a href="#" className="inline-block border-b-2 border-white pb-1 font-bold text-sm hover:text-primary-esmeralda hover:border-primary-esmeralda transition-all">Ver prendas</a>
+                  <p className="text-gray-200 text-xs mb-3">$300 - $500</p>
+                  <a href="#" className="inline-block border-b-2 border-white pb-1 font-bold text-sm hover:text-primary-esmeralda hover:border-primary-esmeralda transition-all">Ver prendas</a>
                 </div>
-                
               </div>
 
-              {/* Card Inferior: Accesorios Premium */}
               <div className="relative flex-1 rounded-3xl overflow-hidden group shadow-lg">
                 <img 
                   src="https://images.unsplash.com/photo-1547949003-9792a18a2601?q=80&w=1000&auto=format&fit=crop" 
                   alt="Accesorios" 
                   className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700"
                 />
-                <div className="absolute inset-0 bg-black/20 group-hover:bg-black/40 transition-colors"></div>
+                <div className="absolute inset-0 bg-primary/20 group-hover:bg-primary/40 transition-colors"></div>
                 <div className="absolute bottom-0 left-0 p-8 text-white">
                   <h3 className="text-xl md:text-2xl font-bold mb-1">Accesorios premium</h3>
-                  <p className="text-gray-200 text-xs">Desde $500</p>
-                         <a href="#" className="inline-block border-b-2 border-white pb-1 font-bold text-sm hover:text-primary-esmeralda hover:border-primary-esmeralda transition-all">Ver articulos</a>
+                  <p className="text-gray-200 text-xs mb-3">Desde $500</p>
+                  <a href="#" className="inline-block border-b-2 border-white pb-1 font-bold text-sm hover:text-primary-esmeralda hover:border-primary-esmeralda transition-all">Ver articulos</a>
                 </div>
               </div>
-
             </div>
           </div>
         </section>
 
-        <section className="pb-20 px-6 md:px-16 bg-[#F8F9FA]">
+        {/* Lo más buscado - Fondo gris claro */}
+        <section className="py-20 px-6 md:px-16 bg-surface-container-low border-t border-gray-100">
           <div className="max-w-1440px mx-auto">
             <h2 className="text-3xl md:text-4xl font-black text-center mb-12 text-slate-900 tracking-tight">Lo más buscado en tecnología</h2>
             
@@ -217,13 +219,11 @@ const Home: React.FC = () => {
                     alt={tech.title} 
                     className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700"
                   />
-   
-                  <div className="absolute inset-0 bg-black/20 group-hover:bg-black/40 transition-colors duration-300"></div>
+                  <div className="absolute inset-0 bg-primary/30 group-hover:bg-primary/50 transition-colors duration-300"></div>
                   
                   <div className="absolute inset-0 p-6 flex flex-col justify-end items-start text-white">
-                    
                     <div className="flex items-center gap-2 mb-1">
-                      {tech.icon && <span className="material-symbols-outlined text-xl">{tech.icon}</span>}
+                      {tech.icon && <span className="material-symbols-outlined text-xl text-primary-esmeralda">{tech.icon}</span>}
                       <h3 className="text-2xl font-bold leading-tight">{tech.title}</h3>
                     </div>
                   </div>
@@ -232,8 +232,6 @@ const Home: React.FC = () => {
             </div>
           </div>
         </section>
-
-
       </main>
 
       <Footer />
