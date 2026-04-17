@@ -1,1 +1,29 @@
+/* 1. La nueva forma de importar Tailwind en v4 */
 @import "tailwindcss";
+
+/* 2. Tu sistema de diseño (Lo que antes iba en tailwind.config.js) */
+@theme {
+  /* Paleta de Colores */
+    --color-primary: #0f172a;
+    --color-primary-esmeralda: #10b981;
+    
+    --color-surface: #ffffff;
+    --color-surface-container-low: #f8fafc;
+    --color-surface-container-high: #e2e8f0;
+
+    /* Medidas Personalizadas (Spacing) */
+    --spacing-300px: 300px;
+    --spacing-350px: 350px;
+    --spacing-400px: 400px;
+    --spacing-450px: 450px;
+    --spacing-500px: 500px;
+    --spacing-550px: 550px;
+    --spacing-700px: 700px;
+    --spacing-1440px: 1440px;
+
+    /* Tipografías */
+    --font-sans: "Inter", sans-serif;
+    --font-headline: "Poppins", sans-serif;
+}
+
+/* Aquí abajo puedes poner tu CSS normal si lo necesitas */
