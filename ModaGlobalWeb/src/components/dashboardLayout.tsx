@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import Sidebar from './sidebarDashboard';
+import Sidebar from './sidebarDashboard'; // Asegúrate de que el nombre coincida exactamente con tu archivo
 import DashboardHeader from './dashboardHeader';
 
 interface LayoutProps {
@@ -12,7 +12,8 @@ const DashboardLayout: React.FC<LayoutProps> = ({ children }) => {
   const toggleSidebar = () => setSidebarOpen(!isSidebarOpen);
 
   return (
-    <div className="flex h-screen bg-surface overflow-hidden">
+    /* Cambié bg-surface por el contenedor gris claro para dar contraste a las tarjetas blancas */
+    <div className="flex h-screen bg-surface-container-low overflow-hidden font-sans">
       <Sidebar isOpen={isSidebarOpen} toggleSidebar={toggleSidebar} />
       
       <main className={`

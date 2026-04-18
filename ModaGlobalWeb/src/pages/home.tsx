@@ -40,7 +40,8 @@ const Home: React.FC = () => {
                 Lo mejor del mundo, <br />
                 <span className="text-primary-esmeralda">variedad para tu estilo.</span>
               </h1>
-              <button className="bg-primary-esmeralda text-white px-6 py-3 rounded-md font-bold flex items-center gap-3 hover:bg-primary transition-all group text-sm md:text-base">
+              {/* Botón con hover estandarizado */}
+              <button className="bg-primary-esmeralda text-white px-6 py-3 rounded-md font-bold flex items-center gap-3 hover:bg-emerald-400 transition-all group text-sm md:text-base shadow-lg">
                 Comprar ahora
                 <span className="material-symbols-outlined group-hover:translate-x-1 transition-transform">arrow_forward</span>
               </button>
@@ -57,12 +58,12 @@ const Home: React.FC = () => {
               { icon: 'verified_user', title: 'Garantía total', desc: 'Protección en cada compra' }
             ].map((item, i) => (
               <div key={i} className="flex items-center gap-4">
-                <div className="bg-primary/10 p-3 rounded-full text-primary">
+                <div className="bg-primary/10 p-3 rounded-full text-primary-esmeralda">
                   <span className="material-symbols-outlined text-2xl">{item.icon}</span>
                 </div>
                 <div>
-                  <h3 className="font-bold">{item.title}</h3>
-                  <p className="text-sm text-secondary">{item.desc}</p>
+                  <h3 className="font-bold text-slate-800">{item.title}</h3>
+                  <p className="text-sm text-gray-500">{item.desc}</p>
                 </div>
               </div>
             ))}
@@ -74,7 +75,9 @@ const Home: React.FC = () => {
           <div className="max-w-[1440px] mx-auto">
             <div className="flex justify-between items-end mb-10">
               <h2 className="text-2xl md:text-3xl font-headline font-bold text-slate-900">Ofertas del día</h2>
-              <a href="#" className="text-sm font-bold text-primary flex items-center gap-1">Ver todo <span className="material-symbols-outlined text-sm">arrow_forward</span></a>
+              <a href="#" className="text-sm font-bold text-primary-esmeralda hover:text-emerald-400 transition-colors flex items-center gap-1">
+                Ver todo <span className="material-symbols-outlined text-sm">arrow_forward</span>
+              </a>
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
@@ -98,7 +101,7 @@ const Home: React.FC = () => {
                     <p className="text-gray-400 text-xs mb-4">{product.desc}</p>
 
                     <div className="flex items-center gap-2">
-                      <span className="text-primary-esmeralda font-bold text-lg">${product.price.toFixed(2)}</span>
+                      <span className="text-primary-esmeralda font-black text-lg">${product.price.toFixed(2)}</span>
                       <span className="text-gray-400 line-through text-xs">${product.oldPrice.toFixed(2)}</span>
                     </div>
                   </div>
@@ -121,18 +124,18 @@ const Home: React.FC = () => {
               <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent"></div>
               <div className="absolute inset-0 flex flex-col justify-end p-8 md:p-16">
                 <div className="max-w-2xl">
-                  <span className="text-emerald-400 font-bold text-xs md:text-sm tracking-widest uppercase mb-4 block">
+                  <span className="text-primary-esmeralda font-bold text-xs md:text-sm tracking-widest uppercase mb-4 block">
                     Nueva Edición Limitada
                   </span>
                   <h2 className="text-white text-4xl md:text-6xl font-extrabold font-headline leading-none mb-6">
                     Urban Sneaker <br /> Revolution
                   </h2>
-                  <p className="text-gray-300 text-sm md:text-base max-w-lg mb-8 leading-relaxed">
+                  <p className="text-gray-200 text-sm md:text-base max-w-lg mb-8 leading-relaxed">
                     Diseño audaz para el explorador urbano. Experimenta el confort supremo fusionado con la estética de vanguardia.
                   </p>
 
                   <div className="flex flex-wrap items-center gap-6">
-                    <button className="bg-primary text-white px-8 py-3 rounded-lg font-bold hover:bg-primary-esmeralda transition-colors">
+                    <button className="bg-primary-esmeralda text-white px-8 py-3 rounded-lg font-bold hover:bg-emerald-400 transition-colors">
                       Explorar colección
                     </button>
 
@@ -167,8 +170,8 @@ const Home: React.FC = () => {
 
               <div className="absolute bottom-0 left-0 p-8 md:p-12 text-white">
                 <h3 className="text-3xl md:text-4xl font-bold mb-2">Colección otoño/invierno</h3>
-                <p className="text-gray-300 text-sm mb-6 max-w-sm">Piezas atemporales diseñadas para durar.</p>
-                <a href="#" className="inline-block border-b-2 border-white pb-1 font-bold text-sm hover:text-primary-esmeralda hover:border-primary-esmeralda transition-all">Ver prendas</a>
+                <p className="text-gray-200 text-sm mb-6 max-w-sm">Piezas atemporales diseñadas para durar.</p>
+                <a href="#" className="inline-block border-b-2 border-primary-esmeralda pb-1 font-bold text-sm text-primary-esmeralda hover:text-emerald-400 hover:border-emerald-400 transition-all">Ver prendas</a>
               </div>
             </div>
 
@@ -182,7 +185,7 @@ const Home: React.FC = () => {
                   alt="Básicos"
                   className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700"
                 />
-                <div className="absolute inset-0 bg-black/20 group-hover:bg-black/40 transition-colors"></div>
+                <div className="absolute inset-0 bg-primary/20 group-hover:bg-primary/40 transition-colors"></div>
                 <div className="absolute bottom-0 left-0 p-8 text-white">
                   <h3 className="text-xl md:text-2xl font-bold mb-1">Básicos modernos</h3>
                   <p className="text-gray-200 text-xs">$300 - $500</p>
@@ -229,7 +232,7 @@ const Home: React.FC = () => {
                   <div className="absolute inset-0 p-6 flex flex-col justify-end items-start text-white">
 
                     <div className="flex items-center gap-2 mb-1">
-                      {tech.icon && <span className="material-symbols-outlined text-xl">{tech.icon}</span>}
+                      {tech.icon && <span className="material-symbols-outlined text-xl text-primary-esmeralda">{tech.icon}</span>}
                       <h3 className="text-2xl font-bold leading-tight">{tech.title}</h3>
                     </div>
                   </div>

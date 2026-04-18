@@ -82,7 +82,7 @@ const Register: React.FC = () => {
         <div className="relative z-20 flex flex-col justify-between p-16 w-full text-white">
           <div>
             <h1 className="text-3xl font-headline font-bold tracking-tighter mb-4">
-              ModaGlobal
+              Moda<span className="text-primary-esmeralda">Global</span>
             </h1>
           </div>
           <div className="max-w-md">
@@ -90,7 +90,7 @@ const Register: React.FC = () => {
               Únete a la mejor experiencia de compra.
             </h2>
             <div className="h-1 w-24 bg-primary-esmeralda rounded-full mb-8"></div>
-            <p className="text-lg opacity-70 leading-relaxed font-light">
+            <p className="text-lg opacity-80 leading-relaxed font-light">
               Tecnología, accesorios y moda en un solo lugar.
             </p>
           </div>
@@ -100,16 +100,16 @@ const Register: React.FC = () => {
         </div>
       </section>
 
-      <section className="w-full lg:w-1/2 flex items-center justify-center bg-surface px-6 md:px-16 lg:px-24 py-12">
+      <section className="w-full lg:w-1/2 flex items-center justify-center bg-white px-6 md:px-16 lg:px-24 py-12">
         <div className="w-full max-w-md space-y-10">
           <div className="lg:hidden text-center">
-            <h1 className="text-3xl font-headline font-bold tracking-tighter text-primary">
-              ModaGlobal
+            <h1 className="text-3xl font-headline font-bold tracking-tighter text-slate-900">
+              Moda<span className="text-primary-esmeralda">Global</span>
             </h1>
           </div>
 
-          <div className="space-y-4">
-            <h2 className="text-3xl font-headline font-bold text-primary tracking-tight">
+          <div className="space-y-3">
+            <h2 className="text-3xl font-headline font-black text-slate-900 tracking-tight">
               Crear cuenta
             </h2>
             <p className="text-secondary text-sm">
@@ -141,7 +141,7 @@ const Register: React.FC = () => {
               <div className="relative group">
                 <label 
                   htmlFor="email"
-                  className="block text-xs font-label font-semibold text-secondary uppercase tracking-wider mb-2 group-focus-within:text-primary transition-colors"
+                  className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2 group-focus-within:text-emerald-500 transition-colors"
                 >
                   Correo Electrónico
                 </label>
@@ -151,7 +151,7 @@ const Register: React.FC = () => {
                   name="email"
                   value={formData.email}
                   onChange={handleChange}
-                  className="w-full bg-transparent border-b border-outline-variant/30 py-3 focus:outline-none focus:border-primary transition-all text-on-surface placeholder:text-outline-variant/60 border-t-0 border-x-0 focus:ring-0"
+                  className="w-full bg-transparent border-b border-gray-300 py-3 focus:outline-none focus:border-emerald-500 transition-all text-slate-900 placeholder:text-gray-400 border-t-0 border-x-0 focus:ring-0"
                   placeholder="ejemplo@modaglobal.com"
                   required
                 />
@@ -160,7 +160,7 @@ const Register: React.FC = () => {
               <div className="relative group">
                 <label 
                   htmlFor="password"
-                  className="block text-xs font-label font-semibold text-secondary uppercase tracking-wider mb-2 group-focus-within:text-primary transition-colors"
+                  className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2 group-focus-within:text-emerald-500 transition-colors"
                 >
                   Contraseña
                 </label>
@@ -179,7 +179,7 @@ const Register: React.FC = () => {
               <div className="relative group">
                 <label 
                   htmlFor="confirmPassword"
-                  className="block text-xs font-label font-semibold text-secondary uppercase tracking-wider mb-2 group-focus-within:text-primary transition-colors"
+                  className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2 group-focus-within:text-emerald-500 transition-colors"
                 >
                   Confirmar Contraseña
                 </label>
@@ -189,7 +189,7 @@ const Register: React.FC = () => {
                   name="confirmPassword"
                   value={formData.confirmPassword}
                   onChange={handleChange}
-                  className="w-full bg-transparent border-b border-outline-variant/30 py-3 focus:outline-none focus:border-primary transition-all text-on-surface placeholder:text-outline-variant/60 border-t-0 border-x-0 focus:ring-0"
+                  className="w-full bg-transparent border-b border-gray-300 py-3 focus:outline-none focus:border-emerald-500 transition-all text-slate-900 placeholder:text-gray-400 border-t-0 border-x-0 focus:ring-0"
                   placeholder="••••••••"
                   required
                 />
