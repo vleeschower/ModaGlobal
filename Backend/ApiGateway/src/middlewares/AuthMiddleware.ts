@@ -24,7 +24,7 @@ export const validarAccesoGoblal = (req: AuthRequest, res: Response, next: NextF
 
         // Ahora TypeScript sabe que esto es válido gracias a AuthRequest
         req.user = {
-            id: decoded.id_usuario,
+            id: decoded.id,
             rol: decoded.rol,
             tienda_id: decoded.id_tienda // <-- ¡NUEVO!
         };

@@ -1,3 +1,4 @@
+// services/UserService.tsx
 const API_BASE_URL = import.meta.env.VITE_API_GATEWAY_URL || 'http://localhost:3000';
 
 // --- INTERFACES DE USUARIO ---
@@ -7,6 +8,7 @@ export interface User {
   email: string;
   telefono?: string;
   rol: 'SuperAdministrador' | 'Administrador' | 'Cajero' | 'Cliente';
+    id_tienda?: string;
   created_at?: string;
 }
 
@@ -23,10 +25,13 @@ export interface UsersResponse {
   message?: string;
 }
 
+export interface UpdateProfileData {
+  nombre: string;
+  email: string;
+  telefono?: string;
+}
+
 export const userService = {
-  /**
-   * Envía las credenciales al Gateway, que redirige al microservicio de usuarios
-   */
   login: async (email: string, password: string): Promise<AuthResponse> => {
     try {
       const response = await fetch(`${API_BASE_URL}/api/usuarios/login`, {
@@ -49,10 +54,6 @@ export const userService = {
     }
   },
 
-  /**
-   * Registra un nuevo usuario a través del Gateway
-   * El Gateway inyecta automáticamente la API key
-   */
   register: async (userData: Partial<User> & { password: string }): Promise<AuthResponse> => {
     try {
       const response = await fetch(`${API_BASE_URL}/api/usuarios/register`, {
@@ -69,9 +70,6 @@ export const userService = {
     }
   },
 
-  /**
-   * Obtener todos los usuarios (el backend filtra según el rol)
-   */
   getAllUsers: async (): Promise<UsersResponse> => {
     try {
       const token = localStorage.getItem('mg_token');
@@ -91,15 +89,13 @@ export const userService = {
     }
   },
 
-  /**
-   * Actualizar un usuario
-   */
-  updateUser: async (id: string, userData: Partial<User>): Promise<AuthResponse> => {
+  // ✅ NUEVO: Registrar usuario por admin
+  registerByAdmin: async (userData: Partial<User> & { password: string; rol_nombre: string; id_tienda?: string }): Promise<AuthResponse> => {
     try {
       const token = localStorage.getItem('mg_token');
       
-      const response = await fetch(`${API_BASE_URL}/api/usuarios/users/${id}`, {
-        method: 'PUT',
+      const response = await fetch(`${API_BASE_URL}/api/usuarios/admin/users`, {
+        method: 'POST',
         headers: { 
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${token}`
@@ -109,14 +105,84 @@ export const userService = {
 
       return await response.json();
     } catch (error) {
-      console.error('[UserService] Error al actualizar usuario:', error);
-      return { success: false, message: 'Error al actualizar el usuario' };
+      console.error('[UserService] Error en registro por admin:', error);
+      return { success: false, message: 'No se pudo completar el registro.' };
     }
   },
 
   /**
-   * Eliminar un usuario (soft delete)
+   * Actualizar perfil de usuario con validaciones incluidas
    */
+  updateProfile: async (id: string, data: UpdateProfileData): Promise<AuthResponse> => {
+    // Validaciones antes de enviar al backend
+    if (!data.nombre || !data.nombre.trim()) {
+      return { success: false, message: 'El nombre no puede estar vacío' };
+    }
+
+    if (!data.email || !data.email.trim()) {
+      return { success: false, message: 'El correo electrónico no puede estar vacío' };
+    }
+
+    // Validar formato de email
+    const emailRegex = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
+    if (!emailRegex.test(data.email)) {
+      return { success: false, message: 'Formato de correo electrónico inválido' };
+    }
+
+    // Validar nombre (solo letras, espacios, mínimo 2 caracteres)
+    const nombreRegex = /^[a-zA-ZáéíóúñÑüÜ\s]{2,100}$/;
+    if (!nombreRegex.test(data.nombre.trim())) {
+      return { success: false, message: 'El nombre debe tener al menos 2 caracteres y solo letras' };
+    }
+
+    // Validar teléfono si fue proporcionado (solo números, +, -, espacios)
+    if (data.telefono && !/^[0-9+\-\s]{8,20}$/.test(data.telefono)) {
+      return { success: false, message: 'Formato de teléfono inválido' };
+    }
+
+    try {
+      const token = localStorage.getItem('mg_token');
+      
+      const response = await fetch(`${API_BASE_URL}/api/usuarios/users/${id}`, {
+        method: 'PUT',
+        headers: { 
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify({
+          nombre: data.nombre.trim(),
+          email: data.email.toLowerCase().trim(),
+          telefono: data.telefono || null
+        }),
+      });
+
+      return await response.json();
+    } catch (error) {
+      console.error('[UserService] Error al actualizar perfil:', error);
+      return { success: false, message: 'Error de conexión con el servidor' };
+    }
+  },
+
+  updateUser: async (id: string, userData: Partial<User>): Promise<AuthResponse> => {
+  try {
+    const token = localStorage.getItem('mg_token');
+    
+    const response = await fetch(`${API_BASE_URL}/api/usuarios/users/${id}`, {
+      method: 'PUT',
+      headers: { 
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`
+      },
+      body: JSON.stringify(userData),
+    });
+
+    return await response.json();
+  } catch (error) {
+    console.error('[UserService] Error al actualizar usuario:', error);
+    return { success: false, message: 'Error al actualizar el usuario' };
+  }
+},
+
   deleteUser: async (id: string): Promise<AuthResponse> => {
     try {
       const token = localStorage.getItem('mg_token');
@@ -136,9 +202,6 @@ export const userService = {
     }
   },
 
-  /**
-   * Obtener usuario por ID
-   */
   getUserById: async (id: string): Promise<AuthResponse> => {
     try {
       const token = localStorage.getItem('mg_token');
@@ -158,27 +221,17 @@ export const userService = {
     }
   },
 
-
-  /**
-   * Cerrar sesión
-   */
   logout: (): void => {
     localStorage.removeItem('mg_token');
     localStorage.removeItem('mg_user');
     window.location.href = '/login';
   },
 
-  /**
-   * Obtener usuario actual del localStorage
-   */
   getCurrentUser: (): User | null => {
     const userJson = localStorage.getItem('mg_user');
     return userJson ? JSON.parse(userJson) : null;
   },
 
-  /**
-   * Verificar si está autenticado
-   */
   isAuthenticated: (): boolean => {
     return !!localStorage.getItem('mg_token');
   }

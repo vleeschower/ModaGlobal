@@ -4,10 +4,10 @@ import dotenv from 'dotenv';
 dotenv.config();
 
 export const dbConfig: sql.config = {
-    user: process.env.DB_USER || 'Pruebas',
-    password: process.env.DB_PASSWORD || 'Prue12345',
-    server: process.env.DB_SERVER || 'modaglobalserver.database.windows.net',
-    database: process.env.DB_NAME || 'modaglobal_usuarios',
+    user: process.env.DB_USER as string,
+    password: process.env.DB_PASSWORD as string,
+    server: process.env.DB_SERVER as string,
+    database: process.env.DB_NAME as string,
     options: {
         encrypt: true, 
         trustServerCertificate: false

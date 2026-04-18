@@ -3,9 +3,11 @@ import { useNavigate, Link } from 'react-router-dom';
 import Swal from 'sweetalert2';
 import Fondo from '../assets/fondoL.jpg';
 import { userService } from '../services/UserService';
+import { useAuth } from '../context/AuthContext';
 
 const Login: React.FC = () => {
   const navigate = useNavigate();
+  const { login } = useAuth();
   const [email, setEmail] = useState<string>('');
   const [password, setPassword] = useState<string>('');
   const [loading, setLoading] = useState<boolean>(false);
@@ -13,7 +15,6 @@ const Login: React.FC = () => {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    // Validaciones básicas
     if (!email || !password) {
       Swal.fire({
         icon: 'warning',
@@ -26,32 +27,27 @@ const Login: React.FC = () => {
     }
 
     setLoading(true);
-
-    // Llamar al servicio de login
     const result = await userService.login(email, password);
-
     setLoading(false);
 
+    // ✅ Solución: Verificar que result.user existe después de result.success
     if (result.success && result.user) {
-      // Login exitoso - redirigir según el rol
-      const rol = result.user.rol;
+      // Guardar en el contexto global
+      login(result.user, result.token!);
       
-      // Mensaje de bienvenida
       Swal.fire({
         icon: 'success',
         title: `¡Bienvenido!`,
-        text: `Has iniciado sesión como ${getRolText(rol)}`,
+        text: `Has iniciado sesión como ${getRolText(result.user.rol)}`,
         confirmButtonColor: '#002727',
         confirmButtonText: 'Continuar',
         timer: 2000,
         timerProgressBar: true,
         showConfirmButton: true
       }).then(() => {
-        // Redirigir según el rol
-        redirectByRole(rol);
+        redirectByRole(result.user!.rol); // ✅ Usamos ! para asegurar que no es undefined
       });
     } else {
-      // Error de login
       Swal.fire({
         icon: 'error',
         title: 'Error de autenticación',
@@ -62,39 +58,36 @@ const Login: React.FC = () => {
     }
   };
 
-  // Función para obtener texto amigable del rol
   const getRolText = (rol: string): string => {
-  switch (rol) {
-    case 'SuperAdministrador':
-      return 'Super Administrador';
-    case 'Administrador':
-      return 'Administrador';
-    case 'Cajero':
-      return 'Cajero';
-    case 'Cliente':
-      return 'Cliente';
-    default:
-      return 'Usuario';
-  }
-};
+    switch (rol) {
+      case 'SuperAdministrador':
+        return 'Super Administrador';
+      case 'Administrador':
+        return 'Administrador';
+      case 'Cajero':
+        return 'Cajero';
+      case 'Cliente':
+        return 'Cliente';
+      default:
+        return 'Usuario';
+    }
+  };
 
- // Función para redirigir según el rol
-const redirectByRole = (rol: string) => {
-  switch (rol) {
-    case 'SuperAdministrador':
-    case 'Administrador':
-    case 'Cajero':
-      navigate('/dashboard/users');
-      break;
-    case 'Cliente':
-      navigate('/');
-      break;
-    default:
-      navigate('/');
-      break;
-  }
-};
-
+  const redirectByRole = (rol: string) => {
+    switch (rol) {
+      case 'SuperAdministrador':
+      case 'Administrador':
+      case 'Cajero':
+        navigate('/dashboard');
+        break;
+      case 'Cliente':
+        navigate('/');
+        break;
+      default:
+        navigate('/');
+        break;
+    }
+  };
 
   return (
     <main className="flex min-h-screen bg-surface font-body text-on-surface antialiased">
@@ -106,17 +99,13 @@ const redirectByRole = (rol: string) => {
             src={Fondo}
           />
         </div>
-        
-        {/* Degradado oscuro usando nuestro color primario */}
         <div className="absolute inset-0 z-10 bg-linear-to-br from-primary/90 to-primary/60" />
-
         <div className="relative z-20 flex flex-col justify-between p-16 w-full text-white">
           <div>
             <h1 className="text-3xl font-headline font-bold tracking-tighter mb-4">
               Moda<span className="text-primary-esmeralda">Global</span>
             </h1>
           </div>
-
           <div className="max-w-md">
             <h2 className="text-3xl font-headline font-extrabold leading-tight mb-6">
               Toda la tecnología, accesorios y moda en un solo lugar.
@@ -127,7 +116,6 @@ const redirectByRole = (rol: string) => {
               y lo mejor de la moda. Tu destino único para todo lo que necesitas.
             </p>
           </div>
-
           <div className="flex items-center space-x-4 text-xs uppercase tracking-widest opacity-60">
             <span>© 2026 ModaGlobal</span>
           </div>
@@ -141,7 +129,6 @@ const redirectByRole = (rol: string) => {
               Moda<span className="text-primary-esmeralda">Global</span>
             </h1>
           </div>
-
           <div className="space-y-3">
             <h2 className="text-3xl font-headline font-black text-slate-900 tracking-tight">
               Bienvenido de nuevo
@@ -154,10 +141,7 @@ const redirectByRole = (rol: string) => {
           <form className="space-y-8" onSubmit={handleSubmit}>
             <div className="space-y-6">
               <div className="relative group">
-                <label 
-                  htmlFor="email"
-                  className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2 group-focus-within:text-emerald-500 transition-colors"
-                >
+                <label htmlFor="email" className="block text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2 group-focus-within:text-emerald-500 transition-colors">
                   Correo Electrónico
                 </label>
                 <input
@@ -174,10 +158,7 @@ const redirectByRole = (rol: string) => {
 
               <div className="relative group">
                 <div className="flex justify-between items-center mb-2">
-                  <label 
-                    htmlFor="password"
-                    className="block text-xs font-semibold text-gray-500 uppercase tracking-wider group-focus-within:text-emerald-500 transition-colors"
-                  >
+                  <label htmlFor="password" className="block text-xs font-semibold text-gray-500 uppercase tracking-wider group-focus-within:text-emerald-500 transition-colors">
                     Contraseña
                   </label>
                 </div>
@@ -206,10 +187,7 @@ const redirectByRole = (rol: string) => {
           <div className="text-center pt-6 border-t border-gray-100">
             <p className="text-gray-500 text-sm">
               ¿No tienes una cuenta?
-              <Link 
-                to="/register" 
-                className="text-primary font-bold ml-1 hover:underline underline-offset-4 decoration-primary decoration-2 transition-all"
-              >
+              <Link to="/register" className="text-primary font-bold ml-1 hover:underline underline-offset-4 decoration-primary decoration-2 transition-all">
                 Crear cuenta
               </Link>
             </p>

@@ -1,7 +1,7 @@
 import app from './app';
 import { logger } from './utils/logger';
 
-const PORT = process.env.PORT || 3002;
+const PORT = process.env.PORT || 3022;
 
 app.listen(PORT, () => {
     logger.info(`Servicio de Usuarios corriendo en puerto ${PORT}`);

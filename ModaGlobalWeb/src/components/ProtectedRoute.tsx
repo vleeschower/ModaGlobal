@@ -1,6 +1,6 @@
 // components/ProtectedRoute.tsx
 import { Navigate } from 'react-router-dom';
-import { userService } from '../services/UserService';
+import { useAuth } from '../context/AuthContext';
 
 interface ProtectedRouteProps {
   children: React.ReactNode;
@@ -8,20 +8,21 @@ interface ProtectedRouteProps {
 }
 
 const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children, allowedRoles }) => {
-  const isAuthenticated = userService.isAuthenticated();
-  const currentUser = userService.getCurrentUser();
+  const { isAuthenticated, user } = useAuth();
 
   // Si no está autenticado, redirigir al login
   if (!isAuthenticated) {
     return <Navigate to="/login" replace />;
   }
 
-  if (allowedRoles && currentUser && !allowedRoles.includes(currentUser.rol)) {
+  // Si se especificaron roles permitidos, verificarlos
+  if (allowedRoles && user && !allowedRoles.includes(user.rol)) {
     // Si no tiene el rol permitido, redirigir según su rol
-    if (currentUser.rol === 'cliente') {
+    if (user.rol === 'Cliente') {
       return <Navigate to="/" replace />;
     }
-    return <Navigate to="/dashboard/users" replace />;
+    // Si es Admin, SuperAdmin o Cajero, va al dashboard
+    return <Navigate to="/dashboard" replace />;
   }
 
   return <>{children}</>;

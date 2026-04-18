@@ -12,9 +12,9 @@ const Home: React.FC = () => {
   ];
 
   const techTrends = [
-    { title: 'Laptops', icon: 'laptop', img: 'https://cdn.thewirecutter.com/wp-content/media/2024/07/laptopstopicpage-2048px-3685-2x1-1.jpg?width=2048&quality=75&crop=2:1&auto=webp' },
-    { title: 'Celulares', icon: 'smartphone', img: 'https://images.unsplash.com/photo-1511707171634-5f897ff02aa9?q=80&w=1000&auto=format&fit=crop' },
-    { title: 'Smartwatches', icon: 'watch', img: 'https://images.unsplash.com/photo-1544117519-31a4b719223d?q=80&w=1000&auto=format&fit=crop' },
+    { title: 'Laptops', img: 'https://cdn.thewirecutter.com/wp-content/media/2024/07/laptopstopicpage-2048px-3685-2x1-1.jpg?width=2048&quality=75&crop=2:1&auto=webp' },
+    { title: 'Celulares', img: 'https://images.unsplash.com/photo-1511707171634-5f897ff02aa9?q=80&w=1000&auto=format&fit=crop' },
+    { title: 'Smartwatches', img: 'https://images.unsplash.com/photo-1544117519-31a4b719223d?q=80&w=1000&auto=format&fit=crop' },
     { title: 'Audio Hi-Fi', img: 'https://images.unsplash.com/photo-1546435770-a3e426bf472b?q=80&w=1000&auto=format&fit=crop' }
   ];
 
@@ -41,7 +41,7 @@ const Home: React.FC = () => {
                 <span className="text-primary-esmeralda">variedad para tu estilo.</span>
               </h1>
               {/* Botón con hover estandarizado */}
-              <button className="bg-primary-esmeralda text-white px-6 py-3 rounded-md font-bold flex items-center gap-3 hover:bg-emerald-400 transition-all group text-sm md:text-base shadow-lg">
+              <button className="bg-primary-esmeralda text-white px-6 py-3 rounded-md font-bold flex items-center gap-3 hover:bg-primary transition-all group text-sm md:text-base shadow-lg">
                 Comprar ahora
                 <span className="material-symbols-outlined group-hover:translate-x-1 transition-transform">arrow_forward</span>
               </button>
@@ -75,7 +75,7 @@ const Home: React.FC = () => {
           <div className="max-w-[1440px] mx-auto">
             <div className="flex justify-between items-end mb-10">
               <h2 className="text-2xl md:text-3xl font-headline font-bold text-slate-900">Ofertas del día</h2>
-              <a href="#" className="text-sm font-bold text-primary-esmeralda hover:text-emerald-400 transition-colors flex items-center gap-1">
+              <a href="#" className="text-sm font-bold text-primary hover:text-primary-esmeralda transition-colors flex items-center gap-1">
                 Ver todo <span className="material-symbols-outlined text-sm">arrow_forward</span>
               </a>
             </div>
@@ -135,7 +135,7 @@ const Home: React.FC = () => {
                   </p>
 
                   <div className="flex flex-wrap items-center gap-6">
-                    <button className="bg-primary-esmeralda text-white px-8 py-3 rounded-lg font-bold hover:bg-emerald-400 transition-colors">
+                    <button className="bg-primary-esmeralda text-white px-8 py-3 rounded-lg font-bold hover:bg-primary transition-colors">
                       Explorar colección
                     </button>
 
@@ -171,7 +171,7 @@ const Home: React.FC = () => {
               <div className="absolute bottom-0 left-0 p-8 md:p-12 text-white">
                 <h3 className="text-3xl md:text-4xl font-bold mb-2">Colección otoño/invierno</h3>
                 <p className="text-gray-200 text-sm mb-6 max-w-sm">Piezas atemporales diseñadas para durar.</p>
-                <a href="#" className="inline-block border-b-2 border-primary-esmeralda pb-1 font-bold text-sm text-primary-esmeralda hover:text-emerald-400 hover:border-emerald-400 transition-all">Ver prendas</a>
+                <a href="#" className="inline-block border-b-2 border-white pb-1 font-bold text-sm text-white hover:text-primary-esmeralda hover:border-primary-esmeralda transition-all">Ver prendas</a>
               </div>
             </div>
 
@@ -189,7 +189,7 @@ const Home: React.FC = () => {
                 <div className="absolute bottom-0 left-0 p-8 text-white">
                   <h3 className="text-xl md:text-2xl font-bold mb-1">Básicos modernos</h3>
                   <p className="text-gray-200 text-xs">$300 - $500</p>
-                    <a href="#" className="inline-block border-b-2 border-white pb-1 font-bold text-sm hover:text-primary-esmeralda hover:border-primary-esmeralda transition-all">Ver prendas</a>
+                    <a href="#" className="inline-block border-b-2 border-white pb-1 font-bold text-sm text-white hover:text-primary-esmeralda hover:border-primary-esmeralda transition-all">Ver prendas</a>
                 </div>
               </div>
 
@@ -206,7 +206,7 @@ const Home: React.FC = () => {
                 <div className="absolute bottom-0 left-0 p-8 text-white">
                   <h3 className="text-xl md:text-2xl font-bold mb-1">Accesorios premium</h3>
                   <p className="text-gray-200 text-xs">Desde $500</p>
-                    <a href="#" className="inline-block border-b-2 border-white pb-1 font-bold text-sm hover:text-primary-esmeralda hover:border-primary-esmeralda transition-all">Ver articulos</a>
+                    <a href="#" className="inline-block border-b-2 border-white pb-1 font-bold text-sm text-white hover:text-primary-esmeralda hover:border-primary-esmeralda transition-all">Ver articulos</a>
                 </div>
 
               </div>
@@ -232,7 +232,6 @@ const Home: React.FC = () => {
                   <div className="absolute inset-0 p-6 flex flex-col justify-end items-start text-white">
 
                     <div className="flex items-center gap-2 mb-1">
-                      {tech.icon && <span className="material-symbols-outlined text-xl text-primary-esmeralda">{tech.icon}</span>}
                       <h3 className="text-2xl font-bold leading-tight">{tech.title}</h3>
                     </div>
                   </div>
