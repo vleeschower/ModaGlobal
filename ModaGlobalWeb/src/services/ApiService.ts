@@ -13,6 +13,18 @@ export interface StockItem {
   stock_reservado: number;
 }
 
+export interface PromocionAdmin {
+    id_producto: string;
+    nombre: string;
+    sku: string;
+    precio_base: number;
+    id_promocion: string | null;
+    descuento: number | null;
+    fecha_inicio: string | null;
+    fecha_fin: string | null;
+    id_tienda: string | null;
+}
+
 export interface PaginatedMeta {
   pagina_actual: number;
   productos_por_pagina: number;
@@ -58,6 +70,23 @@ export const apiService = {
     } catch (error) {
       console.error('Error en getProductoStock:', error);
       return { success: false, message: 'No se pudo obtener el stock.' };
+    }
+  },
+
+  // ✨ NUEVO: Registrar un ajuste de stock manual o entrada de mercancía
+  registrarMovimientoStock: async (id_producto: string, cantidad: number, tipo_movimiento: string, id_referencia: string): Promise<ApiResponse<any>> => {
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/inventario/movimientos`, {
+        method: 'POST',
+        headers: getAuthHeaders(),
+        body: JSON.stringify({ id_producto, cantidad, tipo_movimiento, id_referencia })
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || `Error: ${response.status}`);
+      return data;
+    } catch (error: any) {
+      console.error('Error al registrar movimiento:', error);
+      return { success: false, message: error.message || 'Error de red al actualizar inventario.' };
     }
   },
 
@@ -133,6 +162,20 @@ export const apiService = {
     }
   },
 
+  // ✨ NUEVO: Eliminar reseña (Soft Delete)
+  eliminarResena: async (idResena: string): Promise<ApiResponse<any>> => {
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/productos/resenas/${idResena}`, {
+        method: 'DELETE',
+        headers: getAuthHeaders(),
+      });
+      return await response.json();
+    } catch (error: any) {
+      console.error('Error al eliminar reseña:', error);
+      return { success: false, message: 'Error de red al intentar eliminar la reseña.' };
+    }
+  },
+
   saveProductoCompleto: async (form: any, specs: any[], images: File[]): Promise<ApiResponse<any>> => {
     try {
       const formData = new FormData();
@@ -143,7 +186,7 @@ export const apiService = {
       formData.append('descripcion', form.descripcion || '');
       formData.append('sku', form.sku || '');
       formData.append('id_categoria', form.id_categoria || ''); 
-      formData.append('stock_inicial', '10'); // Ajustable según necesidad
+      formData.append('stock_inicial', form.stock_inicial); // Ajustable según necesidad
 
       // 2. Especificaciones (Filtradas y convertidas a JSON)
       const validSpecs = specs.filter(s => s.clave && s.valor);
@@ -205,6 +248,34 @@ export const apiService = {
     } catch (error: any) {
       console.error('Error al eliminar producto:', error);
       return { success: false, message: 'Error de red al intentar eliminar.' };
+    }
+  },
+
+  // ==========================================
+  // SERVICIO DE PROMOCIONES (MÓDULO ADMIN)
+  // ==========================================
+  getPromocionesAdmin: async (): Promise<{success: boolean, tienda_actual?: string, data?: PromocionAdmin[], message?: string}> => {
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/productos/promociones/admin`, {
+        method: 'GET',
+        headers: getAuthHeaders(),
+      });
+      return await response.json();
+    } catch (error: any) {
+      return { success: false, message: 'No se pudo obtener el catálogo de promociones.' };
+    }
+  },
+
+  guardarPromocion: async (id_producto: string, descuento: number, fecha_inicio: string, fecha_fin: string): Promise<ApiResponse<any>> => {
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/productos/promociones/admin/guardar`, {
+        method: 'POST',
+        headers: getAuthHeaders(),
+        body: JSON.stringify({ id_producto, descuento, fecha_inicio, fecha_fin })
+      });
+      return await response.json();
+    } catch (error: any) {
+      return { success: false, message: 'Error de red al guardar promoción.' };
     }
   },
 };

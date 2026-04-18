@@ -20,7 +20,7 @@ router.get('/stock/:id_producto', consultarStock);
 // RUTAS OPERATIVAS / ADMIN
 // ==========================================
 // Solo los gerentes y personal de almacén pueden ingresar o dar de baja mercancía
-router.post('/ajustar', verificarRol(['Admin', 'SuperAdmin']), ajustarStock);
+router.post('/movimientos', verificarRol(['Admin', 'SuperAdmin']), ajustarStock);
 
 // Solo la alta gerencia puede abrir nuevas sucursales físicas/bodegas
 router.post('/tiendas', verificarRol(['SuperAdmin']), crearTienda);

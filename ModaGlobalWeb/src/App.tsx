@@ -8,6 +8,7 @@ import Catalogo from './pages/Catalogo';
 import ProductDetails from './pages/ProductDetails';
 import { AuthProvider } from './context/AuthContext';
 import ProductManager from './pages/ProductManager';
+import PromocionesManager from './pages/PromocionesManager';
 
 function App() {
   return (
@@ -26,6 +27,7 @@ function App() {
           <Route path="/producto/:id" element={<ProductDetails />} />
           <Route path="/admin/producto/nuevo" element={<ProductManager />} />
           <Route path="/admin/producto/editar/:id" element={<ProductManager />} />
+          <Route path="/admin/promociones" element={<PromocionesManager />} />
         </Routes>
       </AuthProvider>
     </BrowserRouter>

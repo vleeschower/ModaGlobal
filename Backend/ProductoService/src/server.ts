@@ -1,6 +1,7 @@
 import app from './app';
 import { logger } from './utils/Logger';
 import { probarConexion } from './config/Db';
+import { iniciarEscuchaInventarios } from './events/EventSubscriber';
 import dotenv from 'dotenv';
 import express from 'express';
 
@@ -14,6 +15,7 @@ app.listen(PORT, async () => {
     // Ejecutamos la prueba inofensiva al arrancar
     logger.info('Iniciando prueba de conexión a Azure...');
     await probarConexion();
+    await iniciarEscuchaInventarios();
 });
 
 // ESTAS DOS LÍNEAS SON VITALES
