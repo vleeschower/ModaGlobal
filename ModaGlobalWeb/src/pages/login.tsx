@@ -1,19 +1,103 @@
 import React, { useState } from 'react';
+import { useNavigate, Link } from 'react-router-dom';
+import Swal from 'sweetalert2';
 import Fondo from '../assets/fondoL.jpg';
-import { Link } from 'react-router-dom';
+import { userService } from '../services/UserService';
 
 const Login: React.FC = () => {
+  const navigate = useNavigate();
   const [email, setEmail] = useState<string>('');
   const [password, setPassword] = useState<string>('');
+  const [loading, setLoading] = useState<boolean>(false);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    console.log('Login attempt with:', { email, password });
+    
+    // Validaciones básicas
+    if (!email || !password) {
+      Swal.fire({
+        icon: 'warning',
+        title: 'Campos incompletos',
+        text: 'Por favor ingresa tu correo y contraseña',
+        confirmButtonColor: '#002727',
+        confirmButtonText: 'Entendido'
+      });
+      return;
+    }
+
+    setLoading(true);
+
+    // Llamar al servicio de login
+    const result = await userService.login(email, password);
+
+    setLoading(false);
+
+    if (result.success && result.user) {
+      // Login exitoso - redirigir según el rol
+      const rol = result.user.rol;
+      
+      // Mensaje de bienvenida
+      Swal.fire({
+        icon: 'success',
+        title: `¡Bienvenido!`,
+        text: `Has iniciado sesión como ${getRolText(rol)}`,
+        confirmButtonColor: '#002727',
+        confirmButtonText: 'Continuar',
+        timer: 2000,
+        timerProgressBar: true,
+        showConfirmButton: true
+      }).then(() => {
+        // Redirigir según el rol
+        redirectByRole(rol);
+      });
+    } else {
+      // Error de login
+      Swal.fire({
+        icon: 'error',
+        title: 'Error de autenticación',
+        text: result.message || 'Credenciales inválidas. Por favor intenta de nuevo.',
+        confirmButtonColor: '#002727',
+        confirmButtonText: 'Intentar de nuevo'
+      });
+    }
   };
+
+  // Función para obtener texto amigable del rol
+  const getRolText = (rol: string): string => {
+  switch (rol) {
+    case 'SuperAdministrador':
+      return 'Super Administrador';
+    case 'Administrador':
+      return 'Administrador';
+    case 'Cajero':
+      return 'Cajero';
+    case 'Cliente':
+      return 'Cliente';
+    default:
+      return 'Usuario';
+  }
+};
+
+ // Función para redirigir según el rol
+const redirectByRole = (rol: string) => {
+  switch (rol) {
+    case 'SuperAdministrador':
+    case 'Administrador':
+    case 'Cajero':
+      navigate('/dashboard/users');
+      break;
+    case 'Cliente':
+      navigate('/');
+      break;
+    default:
+      navigate('/');
+      break;
+  }
+};
+
 
   return (
     <main className="flex min-h-screen bg-surface font-body text-on-surface antialiased">
-   
       <section className="hidden lg:flex w-1/2 relative overflow-hidden bg-primary">
         <div className="absolute inset-0 z-0">
           <img
@@ -51,7 +135,6 @@ const Login: React.FC = () => {
 
       <section className="w-full lg:w-1/2 flex items-center justify-center bg-surface px-6 md:px-16 lg:px-24 py-12">
         <div className="w-full max-w-md space-y-12">
-   
           <div className="lg:hidden text-center">
             <h1 className="text-3xl font-headline font-bold tracking-tighter text-primary">
               ModaGlobal
@@ -69,7 +152,6 @@ const Login: React.FC = () => {
 
           <form className="space-y-8" onSubmit={handleSubmit}>
             <div className="space-y-6">
-         
               <div className="relative group">
                 <label 
                   htmlFor="email"
@@ -85,6 +167,7 @@ const Login: React.FC = () => {
                   className="w-full bg-transparent border-b border-outline-variant/30 py-3 focus:outline-none focus:border-primary transition-all text-on-surface placeholder:text-outline-variant/60 border-t-0 border-x-0 focus:ring-0"
                   placeholder="ejemplo@modaglobal.com"
                   required
+                  disabled={loading}
                 />
               </div>
 
@@ -96,7 +179,6 @@ const Login: React.FC = () => {
                   >
                     Contraseña
                   </label>
-                 
                 </div>
                 <input
                   type="password"
@@ -106,15 +188,17 @@ const Login: React.FC = () => {
                   className="w-full bg-transparent border-b border-outline-variant/30 py-3 focus:outline-none focus:border-primary transition-all text-on-surface placeholder:text-outline-variant/60 border-t-0 border-x-0 focus:ring-0"
                   placeholder="••••••••"
                   required
+                  disabled={loading}
                 />
               </div>
             </div>
 
             <button
               type="submit"
-              className="w-full bg-primary text-white py-3 rounded-xl font-headline font-bold text-sm uppercase tracking-[0.2em] shadow-2xl shadow-primary/20 hover:bg-primary-esmeralda transition-all"
+              disabled={loading}
+              className="w-full bg-primary text-white py-3 rounded-xl font-headline font-bold text-sm uppercase tracking-[0.2em] shadow-2xl shadow-primary/20 hover:bg-primary-esmeralda transition-all disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              Iniciar Sesión
+              {loading ? 'Iniciando sesión...' : 'Iniciar Sesión'}
             </button>
           </form>
 
@@ -122,10 +206,10 @@ const Login: React.FC = () => {
             <p className="text-secondary font-label text-sm">
               ¿No tienes una cuenta?
               <Link 
-              to="/register" 
-              className="text-primary font-bold ml-1 hover:underline underline-offset-4 decoration-primary decoration-2 transition-all"
+                to="/register" 
+                className="text-primary font-bold ml-1 hover:underline underline-offset-4 decoration-primary decoration-2 transition-all"
               >
-              Crear cuenta
+                Crear cuenta
               </Link>
             </p>
           </div>

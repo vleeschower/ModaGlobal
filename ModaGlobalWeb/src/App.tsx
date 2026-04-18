@@ -1,22 +1,26 @@
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
-import Login from "./pages/login";
+import { BrowserRouter, Routes, Route } from 'react-router-dom';
+import Login from './pages/login';
 import Register from './pages/register';
-import Home from "./pages/home";
-import DashboardUsuarios from './pages/dashboard/usuarios';
-import Inventario from './pages/inventario';
+import Home from './pages/home';
+import Dashboard from './pages/dashboard/usuarios/usuarios';
+import ProtectedRoute from './components/ProtectedRoute';
 
 function App() {
   return (
     <BrowserRouter>
       <Routes>
-     
-        <Route path="/" element={<Navigate to="/home" />} />
-        
+        {/* Rutas públicas */}
+        <Route path="/" element={<Home />} />
+        <Route path="/home" element={<Home />} />
         <Route path="/login" element={<Login />} />
         <Route path="/register" element={<Register />} />
-        <Route path="/home" element={<Home />} />
-        <Route path="/inventario" element={<Inventario />} />
-        <Route path="/dashboard/users" element={<DashboardUsuarios />} />
+        
+        {/* Rutas protegidas - solo para admins */}
+        <Route path="/dashboard/*" element={
+          <ProtectedRoute allowedRoles={['SuperAdministrador', 'Administrador', 'Cajero']}>
+            <Dashboard />
+          </ProtectedRoute>
+        } />
       </Routes>
     </BrowserRouter>
   );

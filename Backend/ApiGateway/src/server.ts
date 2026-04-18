@@ -25,14 +25,31 @@ const inventarioProxyOptions: Options = {
     }
 };
 
+// 2. Proxy para el Microservicio de Usuarios
+const usuariosProxyOptions: Options = {
+    target: 'http://localhost:3002',
+    changeOrigin: true,
+    pathRewrite: {
+        '^/api/usuarios': '', 
+    },
+    on: {
+        proxyReq: (proxyReq, req, res) => {
+            // El Gateway inyecta la llave secreta que requiere el microservicio
+            proxyReq.setHeader('x-api-key', 'clave-secreta-interna-modaglobal');
+        }
+    }
+};
+
 // Asignar la ruta al proxy
+app.use('/api/usuarios', createProxyMiddleware(usuariosProxyOptions));
 app.use('/api/inventario', createProxyMiddleware(inventarioProxyOptions));
 
-
-// app.use('/api/usuarios', createProxyMiddleware({ target: 'http://localhost:3002', ... }));
 // app.use('/api/productos', createProxyMiddleware({ target: 'http://localhost:3003', ... }));
 // app.use('/api/ventas', createProxyMiddleware({ target: 'http://localhost:3004', ... }));
 
 app.listen(PORT, () => {
     console.log(`[API Gateway] Iniciado y orquestando tráfico en el puerto ${PORT}`);
+    console.log(`[API Gateway] Rutas disponibles:`);
+    console.log(`  - /api/usuarios -> http://localhost:3002`);
+    console.log(`  - /api/inventario -> http://localhost:3001`);
 });
