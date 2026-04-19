@@ -198,3 +198,22 @@ export const ajustarStock = async (req: any, res: Response): Promise<void> => {
         }
     }
 };
+
+export const obtenerTiendas = async (req: any, res: Response): Promise<void> => {
+    try {
+        const pool = await getConnection();
+        
+        const result = await pool.request()
+            .query(`
+                SELECT id_tienda, nombre, region, direccion
+                FROM dbo.tiendas
+                WHERE deleted_at IS NULL
+                ORDER BY nombre ASC
+            `);
+
+        res.status(200).json({ success: true, data: result.recordset });
+    } catch (error) {
+        logger.error('Error obteniendo tiendas', error);
+        res.status(500).json({ error: 'Error interno del servidor' });
+    }
+};

@@ -1,13 +1,21 @@
 import { Request, Response, NextFunction } from 'express';
 import jwt from 'jsonwebtoken';
 
-// Definimos qué trae nuestro usuario dentro del Token
+// 1. Definimos qué trae nuestro usuario dentro del Token para Express
 export interface AuthRequest extends Request {
     user?: {
         id: string;
         rol: string;
-        tienda_id?: string; // <-- ¡NUEVO!
+        tienda_id?: string; // Fundamental para el retail omnicanal
     };
+}
+
+// 2. NUEVO: Tipamos el contenido esperado del JWT para evitar usar 'any'
+interface TokenPayload {
+    id?: string;
+    id_usuario?: string;
+    rol: string;
+    id_tienda?: string;
 }
 
 export const validarAccesoGoblal = (req: AuthRequest, res: Response, next: NextFunction) => {
@@ -20,20 +28,28 @@ export const validarAccesoGoblal = (req: AuthRequest, res: Response, next: NextF
 
     try {
         const secret = process.env.JWT_SECRET || 'llave-maestra-modaglobal-2026';
-        const decoded = jwt.verify(token, secret) as any;
+        
+        // Decodificamos usando nuestra interfaz segura
+        const decoded = jwt.verify(token, secret) as TokenPayload;
 
-        // 1. Lo guardas en la memoria del Gateway (como ya lo tenías)
+        // Normalizamos el ID por si en el token de origen viene como 'id' o 'id_usuario'
+        const userId = decoded.id_usuario || decoded.id || '';
+
+        // Paso A: Lo guardamos en la memoria local de Express (req.user)
         req.user = {
-            id: decoded.id_usuario,
+            id: userId,
             rol: decoded.rol,
-            tienda_id: decoded.id_tienda 
+            tienda_id: decoded.id_tienda
         };
 
-        // 2. ✨ EL TRUCO MAGISTRAL: Lo metes en los Headers de la petición
-        // Así, cuando el Proxy reenvíe la petición al microservicio, viajarán en el "sobre".
-        req.headers['x-user-id'] = decoded.id_usuario;
+        // Paso B: ✨ EL TRUCO MAGISTRAL (Inyección de Headers)
+        // Sobreescribimos los headers de la petición original. Cuando el middleware proxy 
+        // intercepte esta petición, estos datos ya viajarán en el "sobre" hacia los microservicios.
+        req.headers['x-user-id'] = userId;
         req.headers['x-user-rol'] = decoded.rol;
-        req.headers['x-user-tienda-id'] = decoded.id_tienda || ''; // El string vacío protege a los SuperAdmins
+        
+        // El string vacío protege el header en caso de ser un SuperAdmin que no pertenece a una tienda física
+        req.headers['x-user-tienda-id'] = decoded.id_tienda || ''; 
 
         next();
     } catch (error) {

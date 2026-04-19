@@ -4,10 +4,14 @@
 /* 2. Tu sistema de diseño (Lo que antes iba en tailwind.config.js) */
 @theme {
   /* Paleta de Colores */
-    --color-primary: #0f172a;
-    --color-primary-esmeralda: #10b981;
+    --color-primary: #163d3d;
+    --color-primary-esmeralda: #2cb18f;
     
-    --color-surface: #ffffff;
+    --color-surface: #f8fafa;
+    --color-on-surface: #191c1d;
+    --color-secondary: #596060;
+    --color-outline-variant: #c0c8c7;
+
     --color-surface-container-low: #f8fafc;
     --color-surface-container-high: #e2e8f0;
 
@@ -20,10 +24,5 @@
     --spacing-550px: 550px;
     --spacing-700px: 700px;
     --spacing-1440px: 1440px;
-
-    /* Tipografías */
-    --font-sans: "Inter", sans-serif;
-    --font-headline: "Poppins", sans-serif;
 }
 
-/* Aquí abajo puedes poner tu CSS normal si lo necesitas */

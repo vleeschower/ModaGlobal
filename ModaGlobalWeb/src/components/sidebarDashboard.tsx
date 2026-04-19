@@ -1,5 +1,7 @@
 import React from 'react';
-import { Link, useLocation } from 'react-router-dom';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
+import { useAuth } from '../context/AuthContext';
+import Swal from 'sweetalert2';
 
 interface SidebarProps {
   isOpen: boolean;
@@ -8,14 +10,41 @@ interface SidebarProps {
 
 const Sidebar: React.FC<SidebarProps> = ({ isOpen, toggleSidebar }) => {
   const location = useLocation();
+  const navigate = useNavigate();
+  const { logout, user } = useAuth();
   
-  const menuItems = [
-    { name: 'Inicio', icon: 'home', path: '#' },
-    { name: 'Usuarios', icon: 'group', path: '/dashboard/users' },
-    { name: 'Tiendas', icon: 'store', path: '#' },
-    { name: 'Productos', icon: 'inventory_2', path: '#' },
-    { name: 'Pedidos', icon: 'shopping_cart', path: '#' },
+  // Definir todos los items del menú
+  const allMenuItems = [
+    { name: 'Inicio', icon: 'home', path: '/dashboard', roles: ['SuperAdministrador', 'Administrador', 'Cajero'] },
+    { name: 'Usuarios', icon: 'group', path: '/dashboard/users', roles: ['SuperAdministrador', 'Administrador'] },
+    { name: 'Tiendas', icon: 'store', path: '#', roles: ['SuperAdministrador'] },
+    { name: 'Productos', icon: 'inventory_2', path: '#', roles: ['SuperAdministrador', 'Administrador', 'Cajero'] },
+    { name: 'Pedidos', icon: 'shopping_cart', path: '#', roles: ['SuperAdministrador', 'Administrador', 'Cajero'] },
   ];
+
+  // Filtrar items según el rol del usuario
+  const menuItems = allMenuItems.filter(item => {
+    if (!user) return false;
+    return item.roles.includes(user.rol);
+  });
+
+  const handleLogout = () => {
+    Swal.fire({
+      title: '¿Cerrar sesión?',
+      text: '¿Estás seguro de que quieres cerrar sesión?',
+      icon: 'question',
+      showCancelButton: true,
+      confirmButtonColor: '#002727',
+      cancelButtonColor: '#dc2626',
+      confirmButtonText: 'Sí, cerrar sesión',
+      cancelButtonText: 'Cancelar'
+    }).then((result) => {
+      if (result.isConfirmed) {
+        logout();
+        navigate('/');
+      }
+    });
+  };
 
   return (
     <>
@@ -53,7 +82,7 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, toggleSidebar }) => {
                   flex items-center rounded-xl transition-all duration-200 group relative
                   ${isOpen ? 'px-4 py-3 gap-4' : 'justify-center py-3 w-full'}
                   ${isActive 
-                    ? 'bg-primary-esmeralda/20 text-primary-esmeralda font-bold shadow-lg' 
+                    ? 'bg-primary-esmeralda/20 text-white font-bold shadow-lg' 
                     : 'text-gray-400 hover:text-white hover:bg-white/5'}
                 `}
                 title={!isOpen ? item.name : ''}
@@ -76,18 +105,30 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, toggleSidebar }) => {
           })}
         </nav>
 
-        {/* Footer del Sidebar */}
+        {/* Footer del Sidebar - Cerrar sesión */}
         <div className="mt-auto pt-6 border-t border-white/10">
-          <Link 
-            to="/" 
+          <button
+            onClick={handleLogout}
             className={`
-              flex items-center text-gray-400 hover:text-red-400 transition-all rounded-xl
+              w-full flex items-center text-gray-400 hover:text-red-400 transition-all rounded-xl
               ${isOpen ? 'px-4 py-3 gap-4' : 'justify-center py-3 w-full'}
+              group
             `}
+            title={!isOpen ? 'Cerrar sesión' : ''}
           >
-            <span className="material-symbols-outlined">logout</span>
-            {isOpen && <span className="font-sans text-sm whitespace-nowrap">Cerrar sesión</span>}
-          </Link>
+            <span className={`
+              material-symbols-outlined transition-colors
+              ${!isOpen ? 'text-2xl' : 'text-xl'}
+              group-hover:text-red-400
+            `}>
+              logout
+            </span>
+            {isOpen && (
+              <span className="font-sans text-sm whitespace-nowrap group-hover:text-red-400 transition-colors">
+                Cerrar sesión
+              </span>
+            )}
+          </button>
         </div>
       </aside>
     </>

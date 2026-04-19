@@ -1,12 +1,19 @@
-<<<<<<< HEAD
-.env
+# Dependencias
 node_modules/
-dist/
 
-=======
->>>>>>> franco-branch
+# Compilación y Producción
+dist/
+dist-ssr/
+build/
+
+# Variables de entorno y secretos
+.env
+.env.*
+!.env.example
+*.local
+
 # Logs
-logs
+logs/
 *.log
 npm-debug.log*
 yarn-debug.log*
@@ -14,19 +21,10 @@ yarn-error.log*
 pnpm-debug.log*
 lerna-debug.log*
 
-<<<<<<< HEAD
-=======
-node_modules
-dist
-dist-ssr
-*.local
-.env
-
->>>>>>> franco-branch
-# Editor directories and files
+# Configuraciones de Editores y Sistema Operativo
 .vscode/*
 !.vscode/extensions.json
-.idea
+.idea/
 .DS_Store
 *.suo
 *.ntvs*

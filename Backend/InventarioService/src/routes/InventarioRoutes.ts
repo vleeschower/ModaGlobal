@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { consultarStock, ajustarStock, crearTienda } from '../controllers/InventarioController';
 import { verificarAccesoInterno, verificarRol } from '../middlewares/Security';
+import { obtenerTiendas } from '../controllers/InventarioController';
 
 const router = Router();
 
@@ -24,5 +25,8 @@ router.post('/movimientos', verificarRol(['Admin', 'SuperAdmin']), ajustarStock)
 
 // Solo la alta gerencia puede abrir nuevas sucursales físicas/bodegas
 router.post('/tiendas', verificarRol(['SuperAdmin']), crearTienda);
+
+// Ruta para obtener tiendas (solo admins)
+router.get('/tiendas', verificarRol(['SuperAdministrador', 'Administrador']), obtenerTiendas);
 
 export default router;

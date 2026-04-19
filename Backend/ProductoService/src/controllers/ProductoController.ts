@@ -684,9 +684,9 @@ export const obtenerPromocionesAdmin = async (req: any, res: Response): Promise<
         const pool = await getConnection();
 
         // 👑 LÓGICA SUPERADMIN (No necesita tienda, ve toda la red)
-        if (rolUsuario === 'SuperAdmin') {
+        if (rolUsuario === 'SuperAdministrador') { // <-- Cambiar 'SuperAdmin' por 'SuperAdministrador'
             const result = await pool.request().query(`
-                SELECT 
+                SELECT
                     p.id_producto, p.nombre, p.sku, p.precio_base,
                     pr.id_promocion, pr.descuento, pr.fecha_inicio, pr.fecha_fin, pr.id_tienda
                 FROM dbo.productos p
@@ -751,7 +751,8 @@ export const guardarPromocion = async (req: any, res: Response): Promise<void> =
         const rolUsuario = req.usuarioRol;
 
         // CANDADO DE SEGURIDAD
-        const id_tienda = (rolUsuario === 'SuperAdmin' && req.body.id_tienda) 
+        // <-- Cambiar 'SuperAdmin' por 'SuperAdministrador'
+        const id_tienda = (rolUsuario === 'SuperAdministrador' && req.body.id_tienda) 
             ? req.body.id_tienda 
             : req.usuarioTiendaId;
 

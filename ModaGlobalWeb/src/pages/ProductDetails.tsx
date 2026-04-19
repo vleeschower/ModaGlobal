@@ -20,7 +20,7 @@ const sanitizarTexto = (texto: string) => {
 
 const ProductDetails: React.FC = () => {
   const { id } = useParams<{ id: string }>();
-  const { isAdmin } = useAuth(); // Sacamos el rol
+  const { isSuperAdmin, isAdmin } = useAuth(); // Sacamos el rol
 
   const [product, setProduct] = useState<Producto | null>(null);
   const [related, setRelated] = useState<Producto[]>([]);
@@ -123,7 +123,7 @@ useEffect(() => { loadData(true); window.scrollTo(0, 0); }, [id]);
             <nav className="flex items-center gap-2 text-sm text-gray-400">
             <Link to="/" className="hover:text-emerald-500">Inicio</Link> <span>/</span> <Link to="/catalogo" className="hover:text-emerald-500">Catálogo</Link> <span>/</span> <span className="text-slate-900 truncate">{product.nombre}</span>
             </nav>
-            {isAdmin && (
+            {(isSuperAdmin || isAdmin) && (
                 <Link to={`/admin/producto/editar/${product.id_producto}`} className="bg-gray-100 text-gray-600 font-bold px-4 py-2 rounded-lg text-sm hover:bg-gray-200 transition-colors flex items-center gap-2">
                     <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" /></svg>
                     Editar Producto
@@ -229,7 +229,7 @@ useEffect(() => { loadData(true); window.scrollTo(0, 0); }, [id]);
                                     </div>
                                     <p className="text-gray-600 text-sm leading-relaxed">{resena.comentario}</p>
                                     {/* ✨ BOTÓN ADMIN: ELIMINAR RESEÑA */}
-                                    {isAdmin && (
+                                    {(isSuperAdmin || isAdmin) && (
                                         <div className="mt-4 pt-3 border-t border-red-50 flex justify-end">
                                             <button onClick={() => handleEliminarResena(resena.id_resena)} className="text-xs text-red-500 font-bold hover:underline">
                                                 Eliminar Reseña (Admin)

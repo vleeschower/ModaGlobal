@@ -18,26 +18,26 @@ router.use(verificarAccesoInterno);
 // ==========================================
 router.get('/', obtenerProductos);
 router.get('/categorias', obtenerCategorias);
-router.get('/ofertas', obtenerPromocionesPublicas); // Público
+router.get('/ofertas', obtenerPromocionesPublicas); 
 
 // ==========================================
 // RUTAS DE ADMINISTRACIÓN (Estáticas)
 // ==========================================
-// ✨ AQUÍ CORREGIMOS LA RUTA PARA QUE COINCIDA CON EL FRONTEND
-router.get('/promociones/admin', verificarRol(['Admin', 'SuperAdmin']), obtenerPromocionesAdmin);
-router.post('/promociones/admin/guardar', verificarRol(['Admin', 'SuperAdmin']), guardarPromocion);
+// ✨ CORRECCIÓN: Usamos 'Administrador' y 'SuperAdministrador' completos
+router.get('/promociones/admin', verificarRol(['Administrador', 'SuperAdministrador']), obtenerPromocionesAdmin);
+router.post('/promociones/admin/guardar', verificarRol(['Administrador', 'SuperAdministrador']), guardarPromocion);
 
-router.post('/promociones', verificarRol(['Admin', 'SuperAdmin']), crearPromocion);
-router.post('/proveedores/vincular', verificarRol(['Admin', 'SuperAdmin']), vincularProveedor);
-router.post('/nuevo', verificarRol(['Admin', 'SuperAdmin']), upload.array('imagenes', 5), crearProducto);
-router.post('/resenas', crearResena); // Asumiendo que la validación de auth la haces en el controlador
+router.post('/promociones', verificarRol(['Administrador', 'SuperAdministrador']), crearPromocion);
+router.post('/proveedores/vincular', verificarRol(['Administrador', 'SuperAdministrador']), vincularProveedor);
+router.post('/nuevo', verificarRol(['Administrador', 'SuperAdministrador']), upload.array('imagenes', 5), crearProducto);
+router.post('/resenas', crearResena); 
 
 // ==========================================
 // RUTAS DINÁMICAS (Siempre al final, porque usan /:id)
 // ==========================================
 router.get('/:id', obtenerProductoPorId);
 router.get('/:id/resenas', obtenerResenas);
-router.put('/:id', verificarRol(['Admin', 'SuperAdmin']), upload.array('imagenes', 5), actualizarProducto);
-router.delete('/:id', verificarRol(['Admin', 'SuperAdmin']), eliminarProducto);
+router.put('/:id', verificarRol(['Administrador', 'SuperAdministrador']), upload.array('imagenes', 5), actualizarProducto);
+router.delete('/:id', verificarRol(['Administrador', 'SuperAdministrador']), eliminarProducto);
 
 export default router;
