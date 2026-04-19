@@ -1,5 +1,7 @@
 import React, { useState } from 'react';
-import { Link } from 'react-router-dom'; 
+import { Link, useNavigate } from 'react-router-dom'; 
+import { useAuth } from '../context/AuthContext';
+import Swal from 'sweetalert2';
 import logoImg from '../assets/logom.png';
 
 interface HeaderProps {
@@ -7,7 +9,10 @@ interface HeaderProps {
 }
 
 const Header: React.FC<HeaderProps> = ({ toggleSidebar }) => {
+  const { user, logout, isAuthenticated } = useAuth();
+  const navigate = useNavigate();
   const [isOpen, setIsOpen] = useState(false);
+  const [isProfileOpen, setIsProfileOpen] = useState(false);
 
   const navLinks = [
     { name: 'Ropa', href: '#' },
@@ -15,6 +20,35 @@ const Header: React.FC<HeaderProps> = ({ toggleSidebar }) => {
     { name: 'Accesorios', href: '#' },
     { name: 'Ofertas', href: '#' },
   ];
+
+  const handleLogout = () => {
+    Swal.fire({
+      title: '¿Cerrar sesión?',
+      text: '¿Estás seguro de que quieres cerrar sesión?',
+      icon: 'question',
+      showCancelButton: true,
+      confirmButtonColor: '#002727',
+      cancelButtonColor: '#dc2626',
+      confirmButtonText: 'Sí, cerrar sesión',
+      cancelButtonText: 'Cancelar'
+    }).then((result) => {
+      if (result.isConfirmed) {
+        logout();
+        setIsOpen(false);
+        setIsProfileOpen(false);
+        navigate('/');
+      }
+    });
+  };
+
+  const handleProfileClick = () => {
+    if (user?.rol === 'Cliente') {
+      navigate('/perfil');
+    } else if (user) {
+      navigate('/dashboard');
+    }
+    setIsProfileOpen(false);
+  };
 
   return (
     <nav className="sticky top-0 w-full z-50 shadow-lg shadow-primary/20 bg-primary">
@@ -65,15 +99,52 @@ const Header: React.FC<HeaderProps> = ({ toggleSidebar }) => {
             <span className="material-symbols-outlined text-2xl">shopping_cart</span>
           </button>
 
-          <Link 
-            to="/login" 
-            className="p-2 hover:bg-white/10 hover:text-primary-esmeralda rounded-full transition-all active:scale-90 flex items-center justify-center"
-            title="Iniciar sesión"
-          >
-            <span className="material-symbols-outlined text-2xl">person</span>
-          </Link>
+          {/* Perfil - Solo muestra dropdown si está autenticado */}
+          <div className="relative">
+            {isAuthenticated ? (
+              <>
+                <button 
+                  onClick={() => setIsProfileOpen(!isProfileOpen)}
+                  className="p-2 hover:bg-white/10 hover:text-primary-esmeralda rounded-full transition-all active:scale-90 flex items-center justify-center"
+                >
+                  <span className="material-symbols-outlined text-2xl">person</span>
+                </button>
 
-          {/* BOTÓN HAMBURGUESA */}
+                {/* Dropdown del perfil - Solo para usuarios logueados */}
+                {isProfileOpen && (
+                  <div className="absolute right-0 mt-2 w-48 bg-white rounded-lg shadow-lg py-1 z-50 border border-gray-100">
+                    <div className="px-4 py-2 border-b border-gray-100">
+                      <p className="text-sm font-medium text-gray-800">{user?.nombre}</p>
+                      <p className="text-xs text-gray-500">{user?.email}</p>
+                    </div>
+                    <button
+                      onClick={handleProfileClick}
+                      className="w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 flex items-center gap-2"
+                    >
+                      <span className="material-symbols-outlined text-lg">account_circle</span>
+                      {user?.rol === 'Cliente' ? 'Mi Perfil' : 'Dashboard'}
+                    </button>
+                    <button
+                      onClick={handleLogout}
+                      className="w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-gray-100 flex items-center gap-2"
+                    >
+                      <span className="material-symbols-outlined text-lg">logout</span>
+                      Cerrar sesión
+                    </button>
+                  </div>
+                )}
+              </>
+            ) : (
+              <Link 
+                to="/login"
+                className="p-2 hover:bg-white/10 hover:text-primary-esmeralda rounded-full transition-all active:scale-90 flex items-center justify-center"
+              >
+                <span className="material-symbols-outlined text-2xl">person</span>
+              </Link>
+            )}
+          </div>
+
+          {/* BOTÓN HAMBURGUESA (solo móvil) */}
           <button 
             onClick={() => setIsOpen(!isOpen)}
             className="p-2 hover:bg-white/10 rounded-full lg:hidden transition-colors"
@@ -88,7 +159,7 @@ const Header: React.FC<HeaderProps> = ({ toggleSidebar }) => {
       {/* MENÚ MÓVIL */}
       <div className={`
         lg:hidden overflow-hidden transition-all duration-300 ease-in-out bg-primary
-        ${isOpen ? 'max-h-500px border-t border-white/10' : 'max-h-0'}
+        ${isOpen ? 'max-h-[600px] border-t border-white/10' : 'max-h-0'}
       `}>
         <div className="flex flex-col p-6 gap-6">
           
@@ -104,24 +175,19 @@ const Header: React.FC<HeaderProps> = ({ toggleSidebar }) => {
             />
           </div>
 
+          {/* Links de navegación móvil */}
           <div className="flex flex-col gap-4">
             {navLinks.map((link) => (
-              <a 
+              <Link 
                 key={link.name}
-                href={link.href}
+                to={link.href}
                 className="text-gray-300 text-lg font-medium hover:text-primary-esmeralda transition-colors py-2 border-b border-white/5"
                 onClick={() => setIsOpen(false)}
               >
                 {link.name}
-              </a>
+              </Link>
             ))}
-            <Link 
-              to="/login"
-              className="text-primary-esmeralda text-lg font-bold py-2 hover:text-emerald-400 transition-colors"
-              onClick={() => setIsOpen(false)}
-            >
-              Iniciar sesión
-            </Link>
+          
           </div>
         </div>
       </div>

@@ -677,3 +677,191 @@ export const obtenerResenas = async (req: Request, res: Response): Promise<void>
     }
 };
 
+// ==========================================
+// 1. OBTENER PROMOCIONES PARA EL ADMIN (Por Tienda)
+// ==========================================
+export const obtenerPromocionesAdmin = async (req: any, res: Response): Promise<void> => {
+    try {
+        const rolUsuario = req.usuarioRol;
+        
+        // ✨ EL DETALLE DEL MIDDLEWARE: 
+        // Nos aseguramos de leer la variable correcta dependiendo de cómo tu middleware guardó el JWT.
+        // Si tu JWT dice "id_tienda", lo ideal es extraerlo así:
+        const id_tienda = req.usuarioTiendaId || req.user?.id_tienda || req.body?.id_tienda;
+
+        const pool = await getConnection();
+
+        // 👑 LÓGICA SUPERADMIN (No necesita tienda, ve toda la red)
+        if (rolUsuario === 'SuperAdmin') {
+            const result = await pool.request().query(`
+                SELECT 
+                    p.id_producto, p.nombre, p.sku, p.precio_base,
+                    pr.id_promocion, pr.descuento, pr.fecha_inicio, pr.fecha_fin, pr.id_tienda
+                FROM dbo.productos p
+                -- Usamos LEFT JOIN para traer el producto AUNQUE NO TENGA promoción
+                LEFT JOIN dbo.promociones pr ON p.id_producto = pr.id_producto AND pr.deleted_at IS NULL
+                WHERE p.deleted_at IS NULL
+                ORDER BY p.created_at DESC
+            `);
+            
+            res.status(200).json({ 
+                success: true, 
+                tienda_actual: 'Todas las Sucursales (MODO SUPERADMIN)', 
+                data: result.recordset 
+            });
+            return;
+        }
+
+        // 🏪 LÓGICA ADMIN (Estrictamente amarrado a su tienda)
+        if (!id_tienda) {
+            logger.warn(`Intento de acceso Admin sin id_tienda en el token. ID Usuario: ${req.usuarioTransaccion}`);
+            res.status(400).json({ error: 'Token inválido: Tu usuario no tiene una tienda asignada en el sistema.' });
+            return;
+        }
+
+        const result = await pool.request()
+            .input('id_tienda', id_tienda)
+            .query(`
+                SELECT 
+                    p.id_producto, p.nombre, p.sku, p.precio_base,
+                    pr.id_promocion, pr.descuento, pr.fecha_inicio, pr.fecha_fin, pr.id_tienda
+                FROM dbo.productos p
+                LEFT JOIN dbo.promociones pr 
+                    ON p.id_producto = pr.id_producto 
+                    AND pr.id_tienda = @id_tienda 
+                    AND pr.deleted_at IS NULL
+                WHERE p.deleted_at IS NULL
+                ORDER BY p.created_at DESC
+            `);
+
+        res.status(200).json({ 
+            success: true, 
+            tienda_actual: id_tienda, 
+            data: result.recordset 
+        });
+
+    } catch (error) {
+        logger.error('Error al obtener promociones admin:', error);
+        res.status(500).json({ error: 'Error interno del servidor.' });
+    }
+};
+
+// ==========================================
+// 2. GUARDAR PROMOCION (CREAR O ACTUALIZAR)
+// ==========================================
+export const guardarPromocion = async (req: any, res: Response): Promise<void> => {
+    const pool = await getConnection();
+    const transaction = pool.transaction();
+
+    try {
+        const { id_producto, descuento, fecha_inicio, fecha_fin } = req.body;
+        const idUsuarioReal = req.usuarioTransaccion || 'SISTEMA';
+        const rolUsuario = req.usuarioRol;
+
+        // CANDADO DE SEGURIDAD
+        const id_tienda = (rolUsuario === 'SuperAdmin' && req.body.id_tienda) 
+            ? req.body.id_tienda 
+            : req.usuarioTiendaId;
+
+        if (!id_tienda) {
+            res.status(403).json({ error: 'Acceso denegado: No tienes una tienda asignada.' });
+            return;
+        }
+
+        if (descuento < 0 || descuento > 100) {
+            res.status(400).json({ error: 'El descuento debe ser un valor entre 0 y 100.' });
+            return;
+        }
+
+        await transaction.begin();
+        const request = transaction.request();
+
+        // Ejecutamos la lógica Upsert (Insertar o Actualizar) en SQL
+        const result = await request
+            .input('id_producto', id_producto)
+            .input('id_tienda', id_tienda)
+            .input('descuento', descuento)
+            .input('fecha_inicio', fecha_inicio)
+            .input('fecha_fin', fecha_fin)
+            .input('id_usuario', idUsuarioReal)
+            .input('ip_origen', req.ip || '127.0.0.1')
+            .query(`
+                BEGIN TRY
+                    DECLARE @id_promocion_existente VARCHAR(50);
+                    DECLARE @id_auditoria VARCHAR(50) = 'aud-' + LEFT(NEWID(), 8);
+                    DECLARE @accion VARCHAR(20);
+                    
+                    -- Verificamos si la tienda ya tiene una promo para este producto
+                    SELECT @id_promocion_existente = id_promocion 
+                    FROM dbo.promociones 
+                    WHERE id_producto = @id_producto AND id_tienda = @id_tienda AND deleted_at IS NULL;
+
+                    IF @id_promocion_existente IS NOT NULL
+                    BEGIN
+                        -- ACTUALIZAR PROMOCIÓN EXISTENTE
+                        UPDATE dbo.promociones 
+                        SET descuento = @descuento, fecha_inicio = @fecha_inicio, fecha_fin = @fecha_fin, 
+                            updated_at = SYSUTCDATETIME(), updated_by = @id_usuario
+                        WHERE id_promocion = @id_promocion_existente;
+
+                        SET @accion = 'UPDATE_PROMO';
+                        
+                        -- Auditoría Update
+                        INSERT INTO dbo.auditoria_productos (id_auditoria, id_usuario, tabla_afectada, id_registro_afectado, accion, valores_nuevos, ip_origen)
+                        VALUES (@id_auditoria, @id_usuario, 'promociones', @id_promocion_existente, @accion, 
+                                JSON_MODIFY(JSON_MODIFY('{}', '$.descuento', @descuento), '$.tienda', @id_tienda), @ip_origen);
+                    END
+                    ELSE
+                    BEGIN
+                        -- CREAR NUEVA PROMOCIÓN
+                        DECLARE @id_nueva_promo VARCHAR(50) = 'prm-' + LEFT(NEWID(), 8);
+                        
+                        INSERT INTO dbo.promociones (id_promocion, id_producto, descuento, fecha_inicio, fecha_fin, id_tienda, created_by)
+                        VALUES (@id_nueva_promo, @id_producto, @descuento, @fecha_inicio, @fecha_fin, @id_tienda, @id_usuario);
+
+                        SET @accion = 'INSERT_PROMO';
+
+                        -- Auditoría Insert
+                        INSERT INTO dbo.auditoria_productos (id_auditoria, id_usuario, tabla_afectada, id_registro_afectado, accion, valores_nuevos, ip_origen)
+                        VALUES (@id_auditoria, @id_usuario, 'promociones', @id_nueva_promo, @accion, 
+                                JSON_MODIFY(JSON_MODIFY('{}', '$.descuento', @descuento), '$.tienda', @id_tienda), @ip_origen);
+                    END
+                END TRY
+                BEGIN CATCH
+                    THROW;
+                END CATCH
+            `);
+
+        await transaction.commit();
+        res.status(200).json({ success: true, message: 'Promoción guardada exitosamente.' });
+
+    } catch (error) {
+        await transaction.rollback();
+        logger.error('Error guardando promoción:', error);
+        res.status(500).json({ error: 'Fallo al guardar la promoción en la base de datos.' });
+    }
+};
+
+// ==========================================
+// 3. OBTENER PROMOCIONES (Vista Pública / Clientes)
+// ==========================================
+export const obtenerPromocionesPublicas = async (req: Request, res: Response): Promise<void> => {
+    // Aquí el frontend del cliente envía la tienda que el usuario seleccionó en la web
+    const tiendaDestino = req.query.tienda || 'tnd-nacional'; 
+    try {
+        const pool = await getConnection();
+        const result = await pool.request()
+            .input('tienda', tiendaDestino)
+            .query(`
+                SELECT p.id_producto, p.nombre, p.precio_base, pr.descuento, pr.fecha_fin
+                FROM dbo.promociones pr
+                INNER JOIN dbo.productos p ON p.id_producto = pr.id_producto
+                WHERE pr.id_tienda = @tienda 
+                  AND pr.deleted_at IS NULL
+                  AND SYSUTCDATETIME() BETWEEN pr.fecha_inicio AND pr.fecha_fin
+            `);
+        res.status(200).json({ success: true, data: result.recordset });
+    } catch (error) {
+        res.status(500).json({ error: 'Error al cargar ofertas.' });
+    }
+};

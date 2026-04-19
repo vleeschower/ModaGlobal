@@ -21,7 +21,7 @@ const Catalogo: React.FC = () => {
     const [isSidebarOpen, setIsSidebarOpen] = useState(false);
     const toggleSidebar = () => setIsSidebarOpen(!isSidebarOpen);
 
-    const { isAdmin } = useAuth(); // <-- Obtenemos si es Admin
+    const { isSuperAdmin, isAdmin } = useAuth(); // <-- Obtenemos si es Admin
 
     useEffect(() => {
         const fetchProductos = async () => {
@@ -60,7 +60,7 @@ const Catalogo: React.FC = () => {
         <div className="bg-white min-h-screen flex flex-col font-sans">
             <Header toggleSidebar={toggleSidebar} />
 
-            <main className="grow max-w-1440px mx-auto w-full px-6 md:px-16 py-12">
+            <main className="grow max-w-[1440px] mx-auto w-full px-6 md:px-16 py-12">
                 {/* ENCABEZADO CON BOTÓN DE ADMIN */}
                 <div className="mb-10 flex flex-col md:flex-row md:justify-between md:items-end gap-4">
                     <div>
@@ -68,8 +68,8 @@ const Catalogo: React.FC = () => {
                         <p className="text-gray-500 mt-2 text-lg">Descubre tecnología, hogar y más con envío a todo México.</p>
                     </div>
                     
-                    {/* Botón exclusivo para Admins */}
-                    {isAdmin && (
+                    {/* Botón unificado para SuperAdmins y Admins */}
+                    {(isSuperAdmin || isAdmin) && (
                         <Link 
                             to="/admin/producto/nuevo" 
                             className="bg-emerald-500 text-white px-6 py-3 rounded-xl font-bold flex items-center gap-2 hover:bg-emerald-600 transition-colors shadow-lg active:scale-95"
