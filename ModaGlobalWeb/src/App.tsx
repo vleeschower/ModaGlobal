@@ -85,13 +85,13 @@ function App() {
           {/* 5. RUTAS EXCLUSIVAS DE SEDE CENTRAL          */}
           {/* ========================================== */}
           {/* SOLO el SuperAdministrador puede modificar el catálogo maestro */}
-          <Route path="/dashboard/producto/nuevo" element={
+          <Route path="/admin/producto/nuevo" element={
             <ProtectedRoute allowedRoles={['SuperAdministrador']}>
               <ProductManager />
             </ProtectedRoute>
           } />
           
-          <Route path="/dashboard/producto/editar/:id" element={
+          <Route path="/admin/producto/editar/:id" element={
             <ProtectedRoute allowedRoles={['SuperAdministrador']}>
               <ProductManager />
             </ProtectedRoute>

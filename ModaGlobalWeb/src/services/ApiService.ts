@@ -253,8 +253,8 @@ export const apiService = {
 
       const isEdit = !!form.id_producto;
       const url = isEdit 
-        ? `${API_BASE_URL}/api/productos/${form.id_producto}` 
-        : `${API_BASE_URL}/api/productos/nuevo`;
+    ? `${API_BASE_URL}/api/productos/admin/producto/editar/${form.id_producto}` 
+    : `${API_BASE_URL}/api/productos/admin/producto/nuevo`;
       const method = isEdit ? 'PUT' : 'POST';
 
       const response = await fetch(url, {

@@ -7,3 +7,6 @@
 {"level":"info","message":"VentasService desplegado en el puerto 3004","servicio":"VentasService","timestamp":"2026-04-20T16:30:20Z"}
 {"level":"info","message":"Iniciando prueba de conexión a Azure (Prisma)...","servicio":"VentasService","timestamp":"2026-04-20T16:30:20Z"}
 {"horaAzure":"2026-04-20T22:30:20.903Z","level":"info","message":"✅ Ping a Azure exitoso. La base de datos de Ventas responde correctamente.","servicio":"VentasService","timestamp":"2026-04-20T16:30:21Z","version":"Microsoft SQL Azure (RTM) - 12..."}
+{"level":"info","message":"VentasService desplegado en el puerto 3004","servicio":"VentasService","timestamp":"2026-04-20T16:39:24Z"}
+{"level":"info","message":"Iniciando prueba de conexión a Azure (Prisma)...","servicio":"VentasService","timestamp":"2026-04-20T16:39:24Z"}
+{"horaAzure":"2026-04-20T22:39:25.190Z","level":"info","message":"✅ Ping a Azure exitoso. La base de datos de Ventas responde correctamente.","servicio":"VentasService","timestamp":"2026-04-20T16:39:25Z","version":"Microsoft SQL Azure (RTM) - 12..."}

@@ -92,7 +92,7 @@ const AdminProductList: React.FC = () => {
           
           {isSuperAdmin && (
             <Link 
-              to="/dashboard/producto/nuevo" 
+              to="/admin/producto/nuevo" 
               className="bg-slate-900 text-white px-6 py-3 rounded-xl font-bold hover:bg-emerald-500 transition-colors shadow-lg active:scale-95 flex items-center gap-2"
             >
               <span className="material-symbols-outlined">add_circle</span>
@@ -170,7 +170,7 @@ const AdminProductList: React.FC = () => {
                       <td className="p-5 flex justify-end gap-2">
                         {isSuperAdmin && (
                           <>
-                            <Link to={`/dashboard/producto/editar/${prod.id_producto}`} className="px-4 py-2 bg-slate-100 text-slate-600 rounded-lg hover:bg-slate-200 hover:text-slate-900 transition-colors font-bold text-xs">
+                            <Link to={`/admin/producto/editar/${prod.id_producto}`} className="px-4 py-2 bg-slate-100 text-slate-600 rounded-lg hover:bg-slate-200 hover:text-slate-900 transition-colors font-bold text-xs">
                               Editar
                             </Link>
                             <button onClick={() => triggerDelete(prod.id_producto, prod.nombre, prod.imagen_url)} className="px-4 py-2 bg-red-50 text-red-600 rounded-lg hover:bg-red-500 hover:text-white transition-colors font-bold text-xs">
