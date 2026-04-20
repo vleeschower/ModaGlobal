@@ -8,26 +8,24 @@ import { publicarEvento } from '../events/EventPublisher';
 // GET: Público (Clientes, Cajeros, Admins) con PAGINACIÓN
 export const obtenerProductos = async (req: Request, res: Response): Promise<void> => {
     try {
-        // 1. Recibimos parámetros de la URL (Ej: /api/productos?page=1&limit=20)
-        // Si no los envían, usamos la página 1 y un límite de 20 por defecto.
         const page = parseInt(req.query.page as string) || 1;
         const limit = parseInt(req.query.limit as string) || 20;
         
-        // Validación de seguridad para que no pidan 1 millón de registros de golpe
         const safeLimit = limit > 100 ? 100 : limit; 
         const offset = (page - 1) * safeLimit;
 
         const pool = await getConnection();
         
-        // 2. Consulta de Paginación Avanzada (SQL Server 2012+)
+        // 2. Consulta corregida: Una sola declaración y un solo flujo
         const result = await pool.request()
             .input('offset', offset)
             .input('limit', safeLimit)
             .query(`
-                -- Obtenemos el total de productos para la paginación
-                DECLARE @TotalRecords INT = (SELECT COUNT(*) FROM dbo.productos WHERE deleted_at IS NULL);
+                -- 1. Declaramos y obtenemos el total una sola vez
+                DECLARE @TotalRecords INT;
+                SELECT @TotalRecords = COUNT(*) FROM dbo.productos WHERE deleted_at IS NULL;
 
-                -- Hacemos un LEFT JOIN para traer el nombre de la categoría
+                -- 2. Obtenemos los productos con su categoría en un solo SELECT
                 SELECT 
                     p.id_producto, 
                     p.nombre, 
@@ -35,23 +33,25 @@ export const obtenerProductos = async (req: Request, res: Response): Promise<voi
                     p.precio_base, 
                     p.imagen_url, 
                     p.id_categoria,
-                    c.nombre AS nombre_categoria -- Aquí está la magia del JOIN
+                    c.nombre AS nombre_categoria
                 FROM dbo.productos p
                 LEFT JOIN dbo.categorias c ON p.id_categoria = c.id_categoria
                 WHERE p.deleted_at IS NULL
                 ORDER BY p.created_at DESC
                 OFFSET @offset ROWS FETCH NEXT @limit ROWS ONLY;
 
-                -- Devolvemos el total
+                -- 3. Devolvemos el total como segundo conjunto de resultados
                 SELECT @TotalRecords as total_registros;
             `);
         
-        // 3. Formateamos la respuesta como las APIs de clase mundial
-        // Le indicamos a TypeScript que trate los recordsets como un arreglo genérico
-        const recordsets = result.recordsets as any[]; 
-        
-        const productos = recordsets[0];
-        const totalRegistros = recordsets[1][0].total_registros;
+        // 3. Formateamos la respuesta
+        const recordsets = result.recordsets as unknown as any[][]; 
+
+        // 2. Ahora ya puedes acceder por índice sin errores
+        const productos = recordsets[0] || [];
+        const totalRegistrosRow = recordsets[1] ? recordsets[1][0] : null;
+        const totalRegistros = totalRegistrosRow ? totalRegistrosRow.total_registros : 0;
+
         const totalPaginas = Math.ceil(totalRegistros / safeLimit);
 
         res.status(200).json({ 
@@ -70,6 +70,77 @@ export const obtenerProductos = async (req: Request, res: Response): Promise<voi
         res.status(500).json({ error: 'Error interno del servidor' });
     }
 };
+
+// POST: Protegido (Solo Admins y SuperAdmins)
+export const crearProducto = async (req: any, res: Response): Promise<void> => {
+    try {
+        const { nombre, descripcion, precio_base, sku, id_categoria, stock_inicial } = req.body;
+        // ESTRATEGIA DE SEGURIDAD 4: Verificar si la subida fue exitosa
+        if (!req.file) {
+            res.status(400).json({ error: 'La imagen del producto es obligatoria.' });
+            return;
+        }
+        const imagenUrlSegura = req.file.path; // URL de Cloudinary (https)
+        const idUsuarioReal = req.headers['x-user-id'] || 'SISTEMA'; 
+        const precioNum = parseFloat(precio_base);
+        const stockNum = parseInt(stock_inicial) || 0;
+
+        // 1. Sanitización Anti-XSS (Limpiamos textos que el usuario pueda ver)
+        const nombreLimpio = xss(nombre);
+        const descLimpia = xss(descripcion);
+
+        const pool = await getConnection();
+        const idProducto = `prod-${uuidv4().substring(0,8)}`;
+        const idAuditoria = `aud-${uuidv4().substring(0,8)}`;
+        const valoresNuevos = JSON.stringify({ nombre: nombreLimpio, precio_base, sku });
+
+        // 2. Consulta Parametrizada (Anti-SQL Injection)
+        await pool.request()
+            .input('id_producto', idProducto)
+            .input('nombre', nombreLimpio)
+            .input('descripcion', descLimpia)
+            .input('id_categoria', id_categoria)
+            .input('precio_base', precioNum)
+            .input('sku', sku)
+            .input('imagen_url', imagenUrlSegura) // Guardamos la URL segura
+            .input('id_usuario', idUsuarioReal)
+            .input('id_auditoria', idAuditoria)
+            .input('valores_nuevos', valoresNuevos)
+            .input('ip_origen', req.ip || '127.0.0.1')
+            .query(`
+                BEGIN TRANSACTION;
+                
+                INSERT INTO dbo.productos (id_producto, nombre, descripcion, id_categoria, precio_base, sku, imagen_url, created_by)
+                VALUES (@id_producto, @nombre, @descripcion, @id_categoria, @precio_base, @sku, @imagen_url, @id_usuario);
+
+                INSERT INTO dbo.auditoria_productos (id_auditoria, id_usuario, tabla_afectada, id_registro_afectado, accion, valores_nuevos, ip_origen)
+                VALUES (@id_auditoria, @id_usuario, 'productos', @id_producto, 'INSERT', @valores_nuevos, @ip_origen);
+                
+                COMMIT TRANSACTION;
+            `);
+
+        logger.info(`Producto ${idProducto} creado en Base de Datos.`);
+        
+        const tiendaDestino = req.usuarioTiendaId || req.body.id_tienda;
+        // ==========================================
+        // 3. ¡LA MAGIA DE LOS EVENTOS OCURRE AQUÍ!
+        // ==========================================
+        // Le avisamos a toda la empresa (incluyendo Inventarios) que hay un nuevo producto
+        await publicarEvento('PRODUCTO_CREADO', {
+            id_producto: idProducto,
+            nombre: nombreLimpio,
+            stock_inicial: stockNum || 0, // Inventarios usará esto
+            precio_base: precio_base,
+            id_tienda: tiendaDestino // <-- NUEVO: Propagamos la tienda para que Inventarios sepa dónde crear el stock
+        });
+
+        res.status(201).json({ success: true, message: 'Producto creado, auditado y propagado en la red.' });
+
+    } catch (error) {
+        logger.error('Error creando producto', error);
+        res.status(500).json({ error: 'Fallo al crear el producto' });
+    }      
+}
 
 // 1. OBTENER DETALLE COMPLETO (Producto + Imágenes + Specs + Rating)
 export const obtenerProductoPorId = async (req: Request, res: Response): Promise<void> => {
@@ -138,127 +209,6 @@ export const obtenerProductoPorId = async (req: Request, res: Response): Promise
     }
 };
 
-// POST: Protegido (Solo Admins y SuperAdmins)
-export const crearProducto = async (req: any, res: Response): Promise<void> => {
-    // 1. Extraemos JWT Headers (El API Gateway los inyecta)
-    const idUsuario = req.headers['x-user-id'] || 'ADMIN';
-    const idTienda = req.headers['x-user-tienda-id'] || req.body.id_tienda || 'tnd-general';
-
-    const pool = await getConnection();
-    const transaction = pool.transaction();
-
-    try {
-        const { nombre, descripcion, precio_base, sku, id_categoria, stock_inicial } = req.body;
-        
-        // 2. Parseamos especificaciones (llegan como texto JSON en el FormData)
-        let especificaciones: { clave: string, valor: string }[] = [];
-        if (req.body.especificaciones) {
-            try { especificaciones = JSON.parse(req.body.especificaciones); } catch(e) {}
-        }
-
-        // 3. Obtenemos las imágenes (Multer las procesa como un arreglo)
-        const imagenes = req.files as Express.Multer.File[] || [];
-        const imagenPrincipalUrl = imagenes.length > 0 ? imagenes[0].path : null;
-
-        // Sanitización y conversiones
-        const nombreLimpio = xss(nombre);
-        const descLimpia = xss(descripcion);
-        const precioNum = parseFloat(precio_base) || 0;
-        const stockNum = parseInt(stock_inicial) || 0;
-
-        const idProducto = `prod-${uuidv4().substring(0,8)}`;
-        const idAuditoria = `aud-${uuidv4().substring(0,8)}`;
-
-        // === INICIA TRANSACCIÓN SQL ===
-        await transaction.begin();
-
-        // A. Insertar Producto Básico
-        const reqProducto = transaction.request();
-        await reqProducto
-            .input('id_producto', idProducto)
-            .input('nombre', nombreLimpio)
-            .input('descripcion', descLimpia)
-            .input('id_categoria', id_categoria || null)
-            .input('precio_base', precioNum)
-            .input('sku', sku || null)
-            .input('imagen_url', imagenPrincipalUrl)
-            .input('id_usuario', idUsuario)
-            .query(`
-                INSERT INTO dbo.productos (id_producto, nombre, descripcion, id_categoria, precio_base, sku, imagen_url, created_by)
-                VALUES (@id_producto, @nombre, @descripcion, @id_categoria, @precio_base, @sku, @imagen_url, @id_usuario);
-            `);
-
-        // B. Insertar Especificaciones (Bucle)
-        for (let i = 0; i < especificaciones.length; i++) {
-            const spec = especificaciones[i];
-            if (spec.clave && spec.valor) {
-                const reqSpec = transaction.request();
-                await reqSpec
-                    .input('id_espec', `spc-${uuidv4().substring(0,8)}`)
-                    .input('id_prod', idProducto)
-                    .input('clave', xss(spec.clave))
-                    .input('valor', xss(spec.valor))
-                    .input('orden', i + 1)
-                    .input('id_user', idUsuario)
-                    .query(`
-                        INSERT INTO dbo.especificaciones_producto (id_especificacion, id_producto, clave, valor, orden, created_by)
-                        VALUES (@id_espec, @id_prod, @clave, @valor, @orden, @id_user);
-                    `);
-            }
-        }
-
-        // C. Insertar Imágenes en Galería (Bucle)
-        for (let i = 0; i < imagenes.length; i++) {
-            const img = imagenes[i];
-            const reqImg = transaction.request();
-            await reqImg
-                .input('id_img', `img-${uuidv4().substring(0,8)}`)
-                .input('id_prod', idProducto)
-                .input('img_url', img.path)
-                .input('es_princ', i === 0 ? 1 : 0) // La foto 0 es la principal
-                .input('orden', i + 1)
-                .input('id_user', idUsuario)
-                .query(`
-                    INSERT INTO dbo.imagenes_producto (id_imagen, id_producto, imagen_url, es_principal, orden, created_by)
-                    VALUES (@id_img, @id_prod, @img_url, @es_princ, @orden, @id_user);
-                `);
-        }
-
-        // D. Auditoría Global
-        const reqAuditoria = transaction.request();
-        await reqAuditoria
-            .input('id_aud', idAuditoria)
-            .input('id_user', idUsuario)
-            .input('id_reg', idProducto)
-            .input('ip', req.ip || '127.0.0.1')
-            .input('valores', JSON.stringify({ nombre: nombreLimpio, precio: precioNum, specs: especificaciones.length, fotos: imagenes.length }))
-            .query(`
-                INSERT INTO dbo.auditoria_productos (id_auditoria, id_usuario, tabla_afectada, id_registro_afectado, accion, valores_nuevos, ip_origen)
-                VALUES (@id_aud, @id_user, 'productos', @id_reg, 'INSERT_COMPLETO', @valores, @ip);
-            `);
-
-        // === CONFIRMAR TRANSACCIÓN ===
-        await transaction.commit();
-
-        // 4. Publicar Evento a Inventarios
-        await publicarEvento('PRODUCTO_CREADO', {
-            id_producto: idProducto,
-            nombre: nombreLimpio,
-            stock_inicial: stockNum,
-            precio_base: precioNum,
-            id_tienda: idTienda 
-        });
-
-        logger.info(`[ÉXITO] Producto ${idProducto} creado con especificaciones y fotos.`);
-        res.status(201).json({ success: true, message: 'Producto registrado en ModaGlobal.', data: { id_producto: idProducto } });
-
-    } catch (error) {
-        // Si algo falla, deshacemos todo lo que se insertó
-        await transaction.rollback();
-        logger.error('Error creando producto maestro (Rollback ejecutado)', error);
-        res.status(500).json({ error: 'Fallo al procesar la alta del producto' });
-    }
-};
 
 // ==========================================
 // MÓDULO: ACTUALIZAR PRODUCTO (PUT)
@@ -477,6 +427,7 @@ export const eliminarProducto = async (req: any, res: Response): Promise<void> =
     } catch (error) {
         logger.error(`Error eliminando producto ${req.params.id}:`, error);
         res.status(500).json({ error: 'No se pudo eliminar el producto.' });
+
     }
 };
 
@@ -647,6 +598,7 @@ export const vincularProveedor = async (req: any, res: Response): Promise<void> 
         logger.error('Error vinculando proveedor', error);
         res.status(500).json({ error: 'Fallo al vincular el proveedor' });
     }
+
 };
 
 // 2. INSERTAR RESEÑA (Con Auditoría y Sanitización)

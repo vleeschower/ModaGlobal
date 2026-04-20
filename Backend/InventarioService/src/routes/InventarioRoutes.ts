@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { consultarStock, ajustarStock, crearTienda } from '../controllers/InventarioController';
-import { verificarAccesoInterno, verificarRol } from '../middlewares/security';
+import { verificarAccesoInterno, verificarRol } from '../middlewares/Security';
 import { obtenerTiendas } from '../controllers/InventarioController';
 
 const router = Router();

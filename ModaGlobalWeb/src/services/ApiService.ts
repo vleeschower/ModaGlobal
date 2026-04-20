@@ -109,17 +109,15 @@ export const apiService = {
     }
   },
 
-  // -- SERVICIO DE PRODUCTOS --
+// -- SERVICIO DE PRODUCTOS --
   getProductos: async (page: number = 1, limit: number = 12): Promise<ApiResponse<Producto[]>> => {
     try {
       const response = await fetch(`${API_BASE_URL}/api/productos?page=${page}&limit=${limit}`, {
         method: 'GET',
-        headers: getAuthHeaders(),
+        // Seguimos enviando getAuthHeaders() por si hay un token, pero si no lo hay, 
+        // fetch enviará la petición vacía y el backend lo dejará pasar.
+        headers: getAuthHeaders(), 
       });
-      
-      if (response.status === 401 || response.status === 403) {
-        return { success: false, message: 'Sesión expirada. Por favor inicia sesión nuevamente.' };
-      }
       
       if (!response.ok) throw new Error(`Error del servidor: ${response.status}`);
       
@@ -132,18 +130,12 @@ export const apiService = {
 
   getProductoById: async (id: string): Promise<ApiResponse<Producto>> => {
     try {
-      if (!checkAuth()) {
-        return { success: false, message: 'No autenticado. Por favor inicia sesión.' };
-      }
+      // 🚨 ELIMINAMOS el bloque de checkAuth() porque cualquiera puede ver un producto
 
       const response = await fetch(`${API_BASE_URL}/api/productos/${id}`, {
         method: 'GET',
         headers: getAuthHeaders(),
       });
-      
-      if (response.status === 401 || response.status === 403) {
-        return { success: false, message: 'Sesión expirada. Por favor inicia sesión nuevamente.' };
-      }
       
       if (!response.ok) throw new Error(`Error: ${response.status}`);
       return await response.json();

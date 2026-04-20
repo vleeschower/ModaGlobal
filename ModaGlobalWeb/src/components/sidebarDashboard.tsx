@@ -19,6 +19,7 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, toggleSidebar }) => {
     { name: 'Usuarios', icon: 'group', path: '/dashboard/users', roles: ['SuperAdministrador', 'Administrador'] },
     { name: 'Tiendas', icon: 'store', path: '#', roles: ['SuperAdministrador'] },
     { name: 'Productos', icon: 'inventory_2', path: '/dashboard/productos', roles: ['SuperAdministrador', 'Administrador', 'Cajero'] },
+
     { name: 'Pedidos', icon: 'shopping_cart', path: '#', roles: ['SuperAdministrador', 'Administrador', 'Cajero'] },
   ];
 

@@ -19,7 +19,6 @@ import PerfilDashboard from './pages/dashboard/usuarios/miPerfil';
 import AdminProductList from './pages/dashboard/AdminProductList';
 import ProductManager from './pages/ProductManager';
 import Inventario from './pages/inventario';
-//import PromocionesManager from './pages/PromocionesManager';
 
 function App() {
   return (
