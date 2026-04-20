@@ -1,0 +1,98 @@
+// prisma/schema.prisma
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlserver"
+  url      = env("DATABASE_URL")
+}
+
+model Ventas {
+  id_venta           String    @id @db.VarChar(50)
+  id_usuario         String    @db.VarChar(50)
+  id_tienda          String?   @db.VarChar(50)
+  canal              String?   @db.NVarChar(100)
+  subtotal           Decimal?  @db.Decimal(10, 2)
+  impuestos          Decimal?  @db.Decimal(10, 2)
+  total              Decimal   @db.Decimal(10, 2)
+  estado             String?   @db.NVarChar(50)
+  codigo_recoleccion String?   @db.VarChar(50)
+  created_at         DateTime? @default(now()) @db.DateTime2
+  updated_at         DateTime? @updatedAt @db.DateTime2
+
+  detalles           DetalleVenta[]
+  pagos              Pago[]
+  auditorias         AuditoriaVentas[]
+
+  @@map("ventas")
+}
+
+model DetalleVenta {
+  id_detalle               String    @id @db.VarChar(50)
+  id_venta                 String    @db.VarChar(50)
+  id_producto              String    @db.VarChar(50)
+  nombre_producto_snapshot String?   @db.NVarChar(255)
+  cantidad                 Int
+  precio_unitario          Decimal   @db.Decimal(10, 2)
+  created_at               DateTime? @default(now()) @db.DateTime2
+  updated_at               DateTime? @updatedAt @db.DateTime2
+
+  venta                    Ventas    @relation(fields: [id_venta], references: [id_venta])
+
+  @@map("detalle_venta")
+}
+
+model Pago {
+  id_pago            String    @id @db.VarChar(50)
+  id_venta           String    @db.VarChar(50)
+  metodo_pago        String?   @db.NVarChar(100)
+  estado_pago        String?   @db.NVarChar(50)
+  monto              Decimal   @db.Decimal(10, 2)
+  referencia_externa String?   @db.VarChar(255)
+  created_at         DateTime? @default(now()) @db.DateTime2
+  updated_at         DateTime? @updatedAt @db.DateTime2
+
+  venta              Ventas    @relation(fields: [id_venta], references: [id_venta])
+
+  @@map("pago")
+}
+
+model AuditoriaVentas {
+  id_auditoria    String    @id @db.VarChar(50)
+  id_venta        String    @db.VarChar(50)
+  estado_anterior String?   @db.NText
+  estado_nuevo    String    @db.NText
+  id_usuario      String    @db.VarChar(50)
+  created_at      DateTime? @default(now()) @db.DateTime2
+
+  venta           Ventas    @relation(fields: [id_venta], references: [id_venta])
+
+  @@map("auditoria_ventas")
+}
+
+model Carrito {
+  id_carrito String    @id @db.VarChar(50)
+  id_usuario String    @db.VarChar(50)
+  estado     String?   @db.NVarChar(50)
+  created_at DateTime? @default(now()) @db.DateTime2
+  updated_at DateTime? @updatedAt @db.DateTime2
+
+  items      CarritoItem[]
+
+  @@map("carrito")
+}
+
+model CarritoItem {
+  id_item     String    @id @db.VarChar(50)
+  id_producto String    @db.VarChar(50)
+  id_carrito  String    @db.VarChar(50)
+  cantidad    Int
+  created_at  DateTime? @default(now()) @db.DateTime2
+  updated_at  DateTime? @updatedAt @db.DateTime2
+
+  carrito     Carrito   @relation(fields: [id_carrito], references: [id_carrito])
+
+  @@map("carrito_item")
+}
