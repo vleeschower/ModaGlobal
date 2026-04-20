@@ -12,18 +12,6 @@ export interface StockItem {
   stock_reservado: number;
 }
 
-export interface PromocionAdmin {
-    id_producto: string;
-    nombre: string;
-    sku: string;
-    precio_base: number;
-    id_promocion: string | null;
-    descuento: number | null;
-    fecha_inicio: string | null;
-    fecha_fin: string | null;
-    id_tienda: string | null;
-}
-
 export interface PaginatedMeta {
   pagina_actual: number;
   productos_por_pagina: number;
@@ -37,6 +25,21 @@ export interface ApiResponse<T> {
   meta?: PaginatedMeta;
   message?: string;
   error?: string;
+  
+  // ✨ NUEVOS CAMPOS PARA EL PANEL DE ADMINISTRACIÓN
+  contexto?: string;
+  rol?: string;
+  tienda_actual?: string;
+}
+
+// Interfaz añadida para evitar errores de compilación en getPromocionesAdmin
+export interface PromocionAdmin {
+  id_promocion?: string;
+  id_producto: string;
+  descuento: number;
+  fecha_inicio: string;
+  fecha_fin: string;
+  [key: string]: any; 
 }
 
 // 3. Función Helper para obtener el token del localStorage
@@ -106,34 +109,15 @@ export const apiService = {
     }
   },
 
-  // ✨ NUEVO: Registrar un ajuste de stock manual o entrada de mercancía
-  registrarMovimientoStock: async (id_producto: string, cantidad: number, tipo_movimiento: string, id_referencia: string): Promise<ApiResponse<any>> => {
-    try {
-      const response = await fetch(`${API_BASE_URL}/api/inventario/movimientos`, {
-        method: 'POST',
-        headers: getAuthHeaders(),
-        body: JSON.stringify({ id_producto, cantidad, tipo_movimiento, id_referencia })
-      });
-      const data = await response.json();
-      if (!response.ok) throw new Error(data.error || `Error: ${response.status}`);
-      return data;
-    } catch (error: any) {
-      console.error('Error al registrar movimiento:', error);
-      return { success: false, message: error.message || 'Error de red al actualizar inventario.' };
-    }
-  },
-
-  // -- SERVICIO DE PRODUCTOS --
+// -- SERVICIO DE PRODUCTOS --
   getProductos: async (page: number = 1, limit: number = 12): Promise<ApiResponse<Producto[]>> => {
     try {
       const response = await fetch(`${API_BASE_URL}/api/productos?page=${page}&limit=${limit}`, {
         method: 'GET',
-        headers: getAuthHeaders(),
+        // Seguimos enviando getAuthHeaders() por si hay un token, pero si no lo hay, 
+        // fetch enviará la petición vacía y el backend lo dejará pasar.
+        headers: getAuthHeaders(), 
       });
-      
-      if (response.status === 401 || response.status === 403) {
-        return { success: false, message: 'Sesión expirada. Por favor inicia sesión nuevamente.' };
-      }
       
       if (!response.ok) throw new Error(`Error del servidor: ${response.status}`);
       
@@ -146,24 +130,43 @@ export const apiService = {
 
   getProductoById: async (id: string): Promise<ApiResponse<Producto>> => {
     try {
-      if (!checkAuth()) {
-        return { success: false, message: 'No autenticado. Por favor inicia sesión.' };
-      }
+      // 🚨 ELIMINAMOS el bloque de checkAuth() porque cualquiera puede ver un producto
 
       const response = await fetch(`${API_BASE_URL}/api/productos/${id}`, {
         method: 'GET',
         headers: getAuthHeaders(),
       });
       
-      if (response.status === 401 || response.status === 403) {
-        return { success: false, message: 'Sesión expirada. Por favor inicia sesión nuevamente.' };
-      }
-      
       if (!response.ok) throw new Error(`Error: ${response.status}`);
       return await response.json();
     } catch (error: any) {
       console.error('Error en getProductoById:', error);
       return { success: false, message: 'No se pudo obtener el detalle del producto.' };
+    }
+  },
+
+  getProductosListaAdmin: async (page: number = 1, limit: number = 10, search: string = '', sort: string = 'newest'): Promise<ApiResponse<any[]>> => {
+    try {
+      if (!checkAuth()) {
+        return { success: false, message: 'No autenticado. Por favor inicia sesión.' };
+      }
+
+      // ✨ SE ENVIAN LA BÚSQUEDA Y EL ORDEN
+      const url = `${API_BASE_URL}/api/productos/admin/lista?page=${page}&limit=${limit}&search=${encodeURIComponent(search)}&sort=${sort}`;
+      
+      const response = await fetch(url, {
+        method: 'GET',
+        headers: getAuthHeaders(),
+      });
+      
+      if (response.status === 401 || response.status === 403) {
+        return { success: false, message: 'Sesión expirada o no tienes permisos.' };
+      }
+      
+      return await response.json();
+    } catch (error: any) {
+      console.error('Error en getProductosListaAdmin:', error);
+      return { success: false, message: 'Error de red al obtener la tabla de productos.' };
     }
   },
 
@@ -220,20 +223,6 @@ export const apiService = {
     }
   },
 
-  // ✨ NUEVO: Eliminar reseña (Soft Delete)
-  eliminarResena: async (idResena: string): Promise<ApiResponse<any>> => {
-    try {
-      const response = await fetch(`${API_BASE_URL}/api/productos/resenas/${idResena}`, {
-        method: 'DELETE',
-        headers: getAuthHeaders(),
-      });
-      return await response.json();
-    } catch (error: any) {
-      console.error('Error al eliminar reseña:', error);
-      return { success: false, message: 'Error de red al intentar eliminar la reseña.' };
-    }
-  },
-
   saveProductoCompleto: async (form: any, specs: any[], images: File[]): Promise<ApiResponse<any>> => {
     try {
       if (!checkAuth()) {
@@ -248,7 +237,8 @@ export const apiService = {
       formData.append('descripcion', form.descripcion || '');
       formData.append('sku', form.sku || '');
       formData.append('id_categoria', form.id_categoria || ''); 
-      
+
+      // ⚠️ CORRECCIÓN: Se eliminó el "formData.append('stock_inicial', '10');" duplicado.
       // Aseguramos que stock_inicial viaje como string y no como número para que FormData no falle
       formData.append('stock_inicial', String(form.stock_inicial || '0')); 
 

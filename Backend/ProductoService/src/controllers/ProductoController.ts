@@ -37,7 +37,7 @@ export const obtenerProductos = async (req: Request, res: Response): Promise<voi
                 FROM dbo.productos p
                 LEFT JOIN dbo.categorias c ON p.id_categoria = c.id_categoria
                 WHERE p.deleted_at IS NULL
-                ORDER BY p.tiene_stock DESC, p.created_at DESC
+                ORDER BY p.created_at DESC
                 OFFSET @offset ROWS FETCH NEXT @limit ROWS ONLY;
 
                 -- 3. Devolvemos el total como segundo conjunto de resultados
@@ -70,6 +70,77 @@ export const obtenerProductos = async (req: Request, res: Response): Promise<voi
         res.status(500).json({ error: 'Error interno del servidor' });
     }
 };
+
+// POST: Protegido (Solo Admins y SuperAdmins)
+export const crearProducto = async (req: any, res: Response): Promise<void> => {
+    try {
+        const { nombre, descripcion, precio_base, sku, id_categoria, stock_inicial } = req.body;
+        // ESTRATEGIA DE SEGURIDAD 4: Verificar si la subida fue exitosa
+        if (!req.file) {
+            res.status(400).json({ error: 'La imagen del producto es obligatoria.' });
+            return;
+        }
+        const imagenUrlSegura = req.file.path; // URL de Cloudinary (https)
+        const idUsuarioReal = req.headers['x-user-id'] || 'SISTEMA'; 
+        const precioNum = parseFloat(precio_base);
+        const stockNum = parseInt(stock_inicial) || 0;
+
+        // 1. Sanitización Anti-XSS (Limpiamos textos que el usuario pueda ver)
+        const nombreLimpio = xss(nombre);
+        const descLimpia = xss(descripcion);
+
+        const pool = await getConnection();
+        const idProducto = `prod-${uuidv4().substring(0,8)}`;
+        const idAuditoria = `aud-${uuidv4().substring(0,8)}`;
+        const valoresNuevos = JSON.stringify({ nombre: nombreLimpio, precio_base, sku });
+
+        // 2. Consulta Parametrizada (Anti-SQL Injection)
+        await pool.request()
+            .input('id_producto', idProducto)
+            .input('nombre', nombreLimpio)
+            .input('descripcion', descLimpia)
+            .input('id_categoria', id_categoria)
+            .input('precio_base', precioNum)
+            .input('sku', sku)
+            .input('imagen_url', imagenUrlSegura) // Guardamos la URL segura
+            .input('id_usuario', idUsuarioReal)
+            .input('id_auditoria', idAuditoria)
+            .input('valores_nuevos', valoresNuevos)
+            .input('ip_origen', req.ip || '127.0.0.1')
+            .query(`
+                BEGIN TRANSACTION;
+                
+                INSERT INTO dbo.productos (id_producto, nombre, descripcion, id_categoria, precio_base, sku, imagen_url, created_by)
+                VALUES (@id_producto, @nombre, @descripcion, @id_categoria, @precio_base, @sku, @imagen_url, @id_usuario);
+
+                INSERT INTO dbo.auditoria_productos (id_auditoria, id_usuario, tabla_afectada, id_registro_afectado, accion, valores_nuevos, ip_origen)
+                VALUES (@id_auditoria, @id_usuario, 'productos', @id_producto, 'INSERT', @valores_nuevos, @ip_origen);
+                
+                COMMIT TRANSACTION;
+            `);
+
+        logger.info(`Producto ${idProducto} creado en Base de Datos.`);
+        
+        const tiendaDestino = req.usuarioTiendaId || req.body.id_tienda;
+        // ==========================================
+        // 3. ¡LA MAGIA DE LOS EVENTOS OCURRE AQUÍ!
+        // ==========================================
+        // Le avisamos a toda la empresa (incluyendo Inventarios) que hay un nuevo producto
+        await publicarEvento('PRODUCTO_CREADO', {
+            id_producto: idProducto,
+            nombre: nombreLimpio,
+            stock_inicial: stockNum || 0, // Inventarios usará esto
+            precio_base: precio_base,
+            id_tienda: tiendaDestino // <-- NUEVO: Propagamos la tienda para que Inventarios sepa dónde crear el stock
+        });
+
+        res.status(201).json({ success: true, message: 'Producto creado, auditado y propagado en la red.' });
+
+    } catch (error) {
+        logger.error('Error creando producto', error);
+        res.status(500).json({ error: 'Fallo al crear el producto' });
+    }      
+}
 
 // 1. OBTENER DETALLE COMPLETO (Producto + Imágenes + Specs + Rating)
 export const obtenerProductoPorId = async (req: Request, res: Response): Promise<void> => {
@@ -140,188 +211,44 @@ export const obtenerProductoPorId = async (req: Request, res: Response): Promise
 
 
 // ==========================================
-// MÓDULO: CREAR PRODUCTO (POST)
-// ==========================================
-export const crearProducto = async (req: any, res: Response): Promise<void> => {
-    const pool = await getConnection();
-    const transaction = pool.transaction();
-
-    try {
-        const { nombre, descripcion, precio_base, sku, id_categoria, stock_inicial, mainImageIndex } = req.body;
-        const idUsuarioReal = req.headers['x-user-id'] || 'SISTEMA'; 
-        
-        // ✨ NUEVO: Parseamos las especificaciones que envía el Frontend
-        let especificaciones: { clave: string, valor: string }[] = [];
-        if (req.body.especificaciones) {
-            try { especificaciones = JSON.parse(req.body.especificaciones); } catch(e) {}
-        }
-
-        // 1. Manejo de Imágenes Múltiples
-        const imagenes = req.files as Express.Multer.File[] || [];
-        if (imagenes.length === 0) {
-            res.status(400).json({ error: 'Debes subir al menos una imagen.' });
-            return;
-        }
-
-        // Definimos cuál es la principal (por defecto la 0, o la que el front haya mandado)
-        const indicePrincipal = parseInt(mainImageIndex) || 0;
-        const imagenPrincipalUrl = imagenes[indicePrincipal]?.path || imagenes[0].path;
-
-        // Sanitización y parseo
-        const nombreLimpio = xss(nombre);
-        const descLimpia = xss(descripcion);
-        const precioNum = parseFloat(precio_base);
-        const stockNum = parseInt(stock_inicial) || 0;
-        const idProducto = `prod-${uuidv4().substring(0,8)}`;
-        const idAuditoria = `aud-${uuidv4().substring(0,8)}`;
-        const valoresNuevos = JSON.stringify({ nombre: nombreLimpio, precio_base, sku });
-
-        // ✨ NUEVO: Calculamos la bandera de SEO (tiene_stock) desde el día 1
-        const tieneStock = stockNum > 0 ? 1 : 0;
-
-        await transaction.begin();
-
-        // A. Insertar en tabla maestra: PRODUCTOS 
-        const reqProducto = transaction.request();
-        await reqProducto
-            .input('id_producto', idProducto)
-            .input('nombre', nombreLimpio)
-            .input('descripcion', descLimpia)
-            .input('id_categoria', id_categoria)
-            .input('precio_base', precioNum)
-            .input('sku', sku)
-            .input('imagen_url', imagenPrincipalUrl) 
-            .input('tiene_stock', tieneStock) // ✨ Inyectamos la bandera
-            .input('id_usuario', idUsuarioReal)
-            .query(`
-                INSERT INTO dbo.productos (id_producto, nombre, descripcion, id_categoria, precio_base, sku, imagen_url, tiene_stock, created_by)
-                VALUES (@id_producto, @nombre, @descripcion, @id_categoria, @precio_base, @sku, @imagen_url, @tiene_stock, @id_usuario);
-            `);
-
-        // B. ✨ NUEVO: Guardar las especificaciones técnicas (Ej. Fuerza de succión, Autonomía)
-        for (let i = 0; i < especificaciones.length; i++) {
-            const spec = especificaciones[i];
-            if (spec.clave && spec.valor) {
-                const reqSpec = transaction.request();
-                await reqSpec
-                    .input('id_espec', `spc-${uuidv4().substring(0,8)}`)
-                    .input('id_prod', idProducto)
-                    .input('clave', xss(spec.clave))
-                    .input('valor', xss(spec.valor))
-                    .input('orden', i + 1)
-                    .input('id_user', idUsuarioReal)
-                    .query(`
-                        INSERT INTO dbo.especificaciones_producto (id_especificacion, id_producto, clave, valor, orden, created_by)
-                        VALUES (@id_espec, @id_prod, @clave, @valor, @orden, @id_user);
-                    `);
-            }
-        }
-
-        // C. Insertar TODAS las imágenes en IMAGENES_PRODUCTO
-        let contadorOrdenSecundario = 2; // Empezamos a contar desde el 2 para las fotos que no son portada
-
-        for (let i = 0; i < imagenes.length; i++) {
-            const reqImg = transaction.request();
-            
-            // Verificamos si este ciclo del bucle corresponde a la imagen que el usuario marcó con la estrella
-            const es_principal = (i === indicePrincipal) ? 1 : 0;
-            
-            // ✨ LÓGICA DE ORDEN: Si es principal, es la 1. Si no, le toca 2, luego 3, luego 4...
-            const ordenImagen = (es_principal === 1) ? 1 : contadorOrdenSecundario++;
-            
-            await reqImg
-                .input('id_imagen', `img-${uuidv4().substring(0,8)}`)
-                .input('id_producto', idProducto)
-                .input('imagen_url', imagenes[i].path) // ¡Ahora sí cada URL será diferente!
-                .input('es_principal', es_principal)
-                .input('orden', ordenImagen) // ✨ Inyectamos el orden calculado
-                .input('id_user', idUsuarioReal)
-                .query(`
-                    INSERT INTO dbo.imagenes_producto (id_imagen, id_producto, imagen_url, es_principal, orden, created_by)
-                    VALUES (@id_imagen, @id_producto, @imagen_url, @es_principal, @orden, @id_user);
-                `);
-        }
-
-        // D. Auditoría
-        const reqAuditoria = transaction.request();
-        await reqAuditoria
-            .input('id_auditoria', idAuditoria)
-            .input('id_usuario', idUsuarioReal)
-            .input('id_producto', idProducto)
-            .input('valores_nuevos', valoresNuevos)
-            .input('ip_origen', req.ip || '127.0.0.1')
-            .query(`
-                INSERT INTO dbo.auditoria_productos (id_auditoria, id_usuario, tabla_afectada, id_registro_afectado, accion, valores_nuevos, ip_origen)
-                VALUES (@id_auditoria, @id_usuario, 'productos', @id_producto, 'INSERT', @valores_nuevos, @ip_origen);
-            `);
-
-        await transaction.commit();
-        logger.info(`Producto ${idProducto} creado en Base de Datos con ${imagenes.length} imágenes y ${especificaciones.length} especificaciones.`);
-        
-        // E. Evento para el microservicio de INVENTARIOS (El Bus)
-        const tiendaDestino = req.usuarioTiendaId || req.body.id_tienda;
-        await publicarEvento('PRODUCTO_CREADO', {
-            id_producto: idProducto,
-            nombre: nombreLimpio,
-            stock_inicial: stockNum || 0, 
-            precio_base: precio_base,
-            id_tienda: tiendaDestino 
-        });
-
-        res.status(201).json({ success: true, message: 'Producto creado exitosamente.' });
-
-    } catch (error) {
-        await transaction.rollback();
-        logger.error('Error creando producto', error);
-        res.status(500).json({ error: 'Fallo al crear el producto' });
-    }
-}
-
-// ==========================================
 // MÓDULO: ACTUALIZAR PRODUCTO (PUT)
 // ==========================================
 export const actualizarProducto = async (req: any, res: Response): Promise<void> => {
     const { id } = req.params;
     const idUsuario = req.headers['x-user-id'] || 'ADMIN';
+
     const pool = await getConnection();
     const transaction = pool.transaction();
 
     try {
-        const { nombre, descripcion, precio_base, sku, id_categoria, mainImageIndex } = req.body;
+        const { nombre, descripcion, precio_base, sku, id_categoria, mainImageId, imagesToDelete: rawImagesToDelete } = req.body;
         
-        // Parseamos especificaciones
+        // 1. Parsear Especificaciones
         let especificaciones: { clave: string, valor: string }[] = [];
         if (req.body.especificaciones) {
             try { especificaciones = JSON.parse(req.body.especificaciones); } catch(e) {}
         }
 
-        // Imágenes
-        const imagenes = req.files as Express.Multer.File[] || [];
-        const traeNuevasImagenes = imagenes.length > 0;
-        const indicePrincipal = parseInt(mainImageIndex) || 0;
-        const imagenPrincipalUrl = traeNuevasImagenes ? imagenes[indicePrincipal]?.path : null;
+        // 2. Parsear Imágenes a borrar
+        let imagesToDelete: string[] = [];
+        if (rawImagesToDelete) {
+            try { imagesToDelete = JSON.parse(rawImagesToDelete); } catch(e) {}
+        }
 
+        // 3. Imágenes Nuevas
+        const imagenesNuevas = req.files as Express.Multer.File[] || [];
+        const traeNuevasImagenes = imagenesNuevas.length > 0;
+
+        // Sanitización
         const nombreLimpio = xss(nombre);
         const descLimpia = xss(descripcion);
         const precioNum = parseFloat(precio_base) || 0;
+        const idAuditoria = `aud-${uuidv4().substring(0,8)}`;
 
         await transaction.begin();
 
-        // A. Actualizar Producto Básico
+        // --- A. Actualizar Producto Básico (Sin tocar imagen_url todavía) ---
         const reqProducto = transaction.request();
-        let queryUpdateProd = `
-            UPDATE dbo.productos 
-            SET nombre = @nombre, descripcion = @descripcion, id_categoria = @id_categoria, 
-                precio_base = @precio_base, sku = @sku, updated_at = SYSUTCDATETIME(), updated_by = @id_usuario
-        `;
-        
-        // Solo sobrescribimos la URL maestra si subieron fotos nuevas
-        if (traeNuevasImagenes) {
-            queryUpdateProd += `, imagen_url = @imagen_url `;
-            reqProducto.input('imagen_url', imagenPrincipalUrl);
-        }
-        queryUpdateProd += ` WHERE id_producto = @id_producto AND deleted_at IS NULL;`;
-
         await reqProducto
             .input('id_producto', id)
             .input('nombre', nombreLimpio)
@@ -330,15 +257,23 @@ export const actualizarProducto = async (req: any, res: Response): Promise<void>
             .input('precio_base', precioNum)
             .input('sku', sku || null)
             .input('id_usuario', idUsuario)
-            .query(queryUpdateProd);
+            .query(`
+                UPDATE dbo.productos 
+                SET nombre = @nombre, descripcion = @descripcion, id_categoria = @id_categoria, 
+                    precio_base = @precio_base, sku = @sku, updated_at = SYSUTCDATETIME(), updated_by = @id_usuario
+                WHERE id_producto = @id_producto AND deleted_at IS NULL;
+            `);
 
-        // B. Actualizar Especificaciones (Borradas Lógicas -> Insertar Nuevas)
+        // --- B. Actualizar Especificaciones ---
         const reqBorrarSpecs = transaction.request();
-        await reqBorrarSpecs.input('id_prod', id).input('id_user', idUsuario).query(`
-            UPDATE dbo.especificaciones_producto 
-            SET deleted_at = SYSUTCDATETIME(), deleted_by = @id_user 
-            WHERE id_producto = @id_prod AND deleted_at IS NULL;
-        `);
+        await reqBorrarSpecs
+            .input('id_prod', id)
+            .input('id_user', idUsuario)
+            .query(`
+                UPDATE dbo.especificaciones_producto 
+                SET deleted_at = SYSUTCDATETIME(), deleted_by = @id_user 
+                WHERE id_producto = @id_prod AND deleted_at IS NULL;
+            `);
 
         for (let i = 0; i < especificaciones.length; i++) {
             const spec = especificaciones[i];
@@ -346,7 +281,11 @@ export const actualizarProducto = async (req: any, res: Response): Promise<void>
                 const reqSpec = transaction.request();
                 await reqSpec
                     .input('id_espec', `spc-${uuidv4().substring(0,8)}`)
-                    .input('id_prod', id).input('clave', xss(spec.clave)).input('valor', xss(spec.valor)).input('orden', i + 1).input('id_user', idUsuario)
+                    .input('id_prod', id)
+                    .input('clave', xss(spec.clave))
+                    .input('valor', xss(spec.valor))
+                    .input('orden', i + 1)
+                    .input('id_user', idUsuario)
                     .query(`
                         INSERT INTO dbo.especificaciones_producto (id_especificacion, id_producto, clave, valor, orden, created_by)
                         VALUES (@id_espec, @id_prod, @clave, @valor, @orden, @id_user);
@@ -354,35 +293,101 @@ export const actualizarProducto = async (req: any, res: Response): Promise<void>
             }
         }
 
-        // C. Actualizar Imágenes (Solo si traen nuevas)
-        if (traeNuevasImagenes) {
-            const reqBorrarImg = transaction.request();
-            await reqBorrarImg.input('id_prod', id).input('id_user', idUsuario).query(`
+        // --- C. GESTIÓN INTELIGENTE DE GALERÍA ---
+        
+        // C1. Borrar las imágenes que el usuario quitó
+        if (imagesToDelete.length > 0) {
+            const placeholders = imagesToDelete.map((_, i) => `@delImg${i}`).join(',');
+            const reqDel = transaction.request();
+            reqDel.input('id_user', idUsuario);
+            imagesToDelete.forEach((id_img, i) => reqDel.input(`delImg${i}`, id_img));
+            
+            await reqDel.query(`
                 UPDATE dbo.imagenes_producto 
                 SET deleted_at = SYSUTCDATETIME(), deleted_by = @id_user 
-                WHERE id_producto = @id_prod AND deleted_at IS NULL;
+                WHERE id_imagen IN (${placeholders}) AND deleted_at IS NULL;
             `);
-
-            for (let i = 0; i < imagenes.length; i++) {
-                const reqImg = transaction.request();
-                const es_principal = (i === indicePrincipal) ? 1 : 0;
-                await reqImg
-                    .input('id_img', `img-${uuidv4().substring(0,8)}`)
-                    .input('id_prod', id).input('img_url', imagenes[i].path).input('es_princ', es_principal).input('orden', i + 1).input('id_user', idUsuario)
-                    .query(`
-                        INSERT INTO dbo.imagenes_producto (id_imagen, id_producto, imagen_url, es_principal, orden, created_by)
-                        VALUES (@id_img, @id_prod, @img_url, @es_princ, @orden, @id_user);
-                    `);
-            }
         }
 
-        // D. Auditoría (Omitida por brevedad en la respuesta, pero déjala como la tenías)
+        // C2. Insertar las imágenes nuevas
+        let firstNewImageId = null;
+        let firstNewImageUrl = null;
+
+        for (let i = 0; i < imagenesNuevas.length; i++) {
+            const img = imagenesNuevas[i];
+            const newImgId = `img-${uuidv4().substring(0,8)}`;
+            
+            if (i === 0) {
+                firstNewImageId = newImgId;
+                firstNewImageUrl = img.path;
+            }
+
+            const reqImg = transaction.request();
+            await reqImg
+                .input('id_img', newImgId)
+                .input('id_prod', id)
+                .input('img_url', img.path)
+                .input('es_princ', 0) // Lo configuramos en el siguiente paso
+                .input('orden', 99) // Se añaden al final de la galería
+                .input('id_user', idUsuario)
+                .query(`
+                    INSERT INTO dbo.imagenes_producto (id_imagen, id_producto, imagen_url, es_principal, orden, created_by)
+                    VALUES (@id_img, @id_prod, @img_url, @es_princ, @orden, @id_user);
+                `);
+        }
+
+        // C3. Configurar la Imagen Principal (Tanto en la galería como en la tabla productos)
+        const reqMainImg = transaction.request();
+        await reqMainImg.input('id_prod', id).query(`
+            -- Primero reseteamos todas a 0
+            UPDATE dbo.imagenes_producto SET es_principal = 0 WHERE id_producto = @id_prod;
+        `);
+
+        if (mainImageId && mainImageId !== 'null' && mainImageId !== 'undefined') {
+            // El usuario eligió una imagen existente como principal
+            reqMainImg.input('main_id', mainImageId);
+            await reqMainImg.query(`
+                UPDATE dbo.imagenes_producto SET es_principal = 1 WHERE id_imagen = @main_id;
+                
+                UPDATE dbo.productos 
+                SET imagen_url = (SELECT imagen_url FROM dbo.imagenes_producto WHERE id_imagen = @main_id)
+                WHERE id_producto = @id_prod;
+            `);
+        } else if (firstNewImageId) {
+            // Si se borraron todas y se subieron nuevas, la primera nueva es la principal
+            reqMainImg.input('first_new_id', firstNewImageId);
+            reqMainImg.input('first_new_url', firstNewImageUrl);
+            await reqMainImg.query(`
+                UPDATE dbo.imagenes_producto SET es_principal = 1 WHERE id_imagen = @first_new_id;
+                UPDATE dbo.productos SET imagen_url = @first_new_url WHERE id_producto = @id_prod;
+            `);
+        }
+
+        // --- D. Auditoría Global ---
+        const reqAuditoria = transaction.request();
+        await reqAuditoria
+            .input('id_aud', idAuditoria)
+            .input('id_user', idUsuario)
+            .input('id_reg', id)
+            .input('ip', req.ip || '127.0.0.1')
+            .input('valores', JSON.stringify({ 
+                nombre: nombreLimpio, 
+                precio: precioNum, 
+                borradas: imagesToDelete.length, 
+                nuevas: imagenesNuevas.length 
+            }))
+            .query(`
+                INSERT INTO dbo.auditoria_productos (id_auditoria, id_usuario, tabla_afectada, id_registro_afectado, accion, valores_nuevos, ip_origen)
+                VALUES (@id_aud, @id_user, 'productos', @id_reg, 'UPDATE_COMPLETO', @valores, @ip);
+            `);
+
         await transaction.commit();
+        logger.info(`[ÉXITO] Producto ${id} actualizado exitosamente.`);
         res.status(200).json({ success: true, message: 'Producto actualizado correctamente.' });
 
     } catch (error) {
         await transaction.rollback();
-        logger.error(`Error actualizando producto ${id}`, error);
+        logger.error(`Error actualizando producto ${id} (Rollback ejecutado)`, error);
         res.status(500).json({ error: 'Fallo al procesar la actualización del producto' });
     }
 };
@@ -595,8 +600,6 @@ export const vincularProveedor = async (req: any, res: Response): Promise<void> 
     }
 
 };
-
-
 
 // 2. INSERTAR RESEÑA (Con Auditoría y Sanitización)
 export const crearResena = async (req: any, res: Response): Promise<void> => {
@@ -856,5 +859,130 @@ export const obtenerPromocionesPublicas = async (req: Request, res: Response): P
         res.status(200).json({ success: true, data: result.recordset });
     } catch (error) {
         res.status(500).json({ error: 'Error al cargar ofertas.' });
+    }
+};
+
+// ==========================================
+// OBTENER PRODUCTOS PARA EL PANEL DE ADMIN (Con Búsqueda y Filtros)
+// ==========================================
+export const obtenerProductosAdmin = async (req: any, res: Response): Promise<void> => {
+    try {
+        const rolUsuario = req.usuarioRol;
+        const id_tienda = req.usuarioTiendaId;
+        
+        // 1. Parámetros de URL
+        const page = parseInt(req.query.page as string) || 1;
+        const limit = parseInt(req.query.limit as string) || 20;
+        const safeLimit = limit > 100 ? 100 : limit; 
+        const offset = (page - 1) * safeLimit;
+        
+        // ✨ NUEVO: Parámetros de Búsqueda y Ordenamiento
+        const searchParam = req.query.search ? req.query.search.toString() : null;
+        const sortParam = req.query.sort ? req.query.sort.toString() : 'newest'; // newest, az, za
+
+        const pool = await getConnection();
+
+        // 👑 SUPERADMINISTRADOR: Ve el catálogo maestro global
+        if (rolUsuario === 'SuperAdministrador') {
+            const result = await pool.request()
+                .input('offset', offset)
+                .input('limit', safeLimit)
+                .input('search', searchParam)
+                .input('sort', sortParam)
+                .query(`
+                DECLARE @TotalRecords INT = (
+                    SELECT COUNT(*) FROM dbo.productos 
+                    WHERE deleted_at IS NULL
+                    AND (@search IS NULL OR nombre LIKE '%' + @search + '%' OR sku LIKE '%' + @search + '%')
+                );
+
+                SELECT p.id_producto, p.nombre, p.precio_base, p.sku, c.nombre as categoria
+                FROM dbo.productos p
+                LEFT JOIN dbo.categorias c ON p.id_categoria = c.id_categoria
+                WHERE p.deleted_at IS NULL
+                AND (@search IS NULL OR p.nombre LIKE '%' + @search + '%' OR p.sku LIKE '%' + @search + '%')
+                ORDER BY 
+                    CASE WHEN @sort = 'az' THEN p.nombre END ASC,
+                    CASE WHEN @sort = 'za' THEN p.nombre END DESC,
+                    CASE WHEN @sort = 'newest' THEN p.created_at END DESC,
+                    p.created_at DESC -- Fallback de seguridad
+                OFFSET @offset ROWS FETCH NEXT @limit ROWS ONLY;
+
+                SELECT @TotalRecords as total_registros;
+            `);
+            
+            const recordsets = result.recordsets as any[]; 
+            const totalRegistros = recordsets[1][0].total_registros;
+
+            res.status(200).json({ 
+                success: true, 
+                rol: 'SuperAdministrador', 
+                contexto: 'Catálogo Global (Sede Central)', 
+                meta: {
+                    pagina_actual: page,
+                    productos_por_pagina: safeLimit,
+                    total_productos: totalRegistros,
+                    total_paginas: Math.ceil(totalRegistros / safeLimit)
+                },
+                data: recordsets[0]
+            });
+            return;
+        }
+
+        // 🏪 ADMINISTRADOR: Ve el catálogo global + SU stock físico
+        if (!id_tienda) {
+            res.status(403).json({ error: 'Acceso denegado: No tienes una sucursal asignada.' });
+            return;
+        }
+
+        const result = await pool.request()
+            .input('id_tienda', id_tienda)
+            .input('offset', offset)
+            .input('limit', safeLimit)
+            .input('search', searchParam)
+            .input('sort', sortParam)
+            .query(`
+                DECLARE @TotalRecords INT = (
+                    SELECT COUNT(*) FROM dbo.productos 
+                    WHERE deleted_at IS NULL
+                    AND (@search IS NULL OR nombre LIKE '%' + @search + '%' OR sku LIKE '%' + @search + '%')
+                );
+
+                SELECT 
+                    p.id_producto, p.nombre, p.precio_base, p.sku, c.nombre as categoria,
+                    ISNULL(i.stock_disponible, 0) as stock_local
+                FROM dbo.productos p
+                LEFT JOIN dbo.categorias c ON p.id_categoria = c.id_categoria
+                LEFT JOIN dbo.inventarios i ON p.id_producto = i.id_producto AND i.id_tienda = @id_tienda
+                WHERE p.deleted_at IS NULL
+                AND (@search IS NULL OR p.nombre LIKE '%' + @search + '%' OR p.sku LIKE '%' + @search + '%')
+                ORDER BY 
+                    CASE WHEN @sort = 'az' THEN p.nombre END ASC,
+                    CASE WHEN @sort = 'za' THEN p.nombre END DESC,
+                    CASE WHEN @sort = 'newest' THEN p.created_at END DESC,
+                    p.created_at DESC
+                OFFSET @offset ROWS FETCH NEXT @limit ROWS ONLY;
+
+                SELECT @TotalRecords as total_registros;
+            `);
+            
+        const recordsets = result.recordsets as any[]; 
+        const totalRegistros = recordsets[1][0].total_registros;
+
+        res.status(200).json({ 
+            success: true, 
+            rol: 'Administrador', 
+            contexto: `Gestión de Sucursal`, 
+            meta: {
+                pagina_actual: page,
+                productos_por_pagina: safeLimit,
+                total_productos: totalRegistros,
+                total_paginas: Math.ceil(totalRegistros / safeLimit)
+            },
+            data: recordsets[0]
+        });
+    } catch (error) {
+        logger.error('Error al obtener productos para panel admin:', error);
+        res.status(500).json({ error: 'Error interno al cargar la tabla de administración.' });
     }
 };

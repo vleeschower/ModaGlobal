@@ -1,19 +1,16 @@
 // src/server.ts
-import express from 'express';
-import cors from 'cors';
-import ventasRoutes from './routes/ventas.routes';
+import app from './app';
+import { logger } from './utils/Logger';
+import { probarConexion } from './config/Db';
+import dotenv from 'dotenv';
 
-const app = express();
-const port = process.env.PORT || 3003;
+dotenv.config();
 
-// Middlewares
-app.use(cors()); // Permite peticiones de React
-app.use(express.json()); // Permite a Express entender JSON (los datos que mandas en un POST)
+const PORT = process.env.PORT || 3003; 
 
-// Rutas
-app.use('/api/ventas', ventasRoutes);
-
-// Iniciar servidor
-app.listen(port, () => {
-  console.log(` Microservicio de Ventas corriendo en http://localhost:${port}`);
+app.listen(PORT, async () => {
+    logger.info(`VentasService desplegado en el puerto ${PORT}`);
+    
+    logger.info('Iniciando prueba de conexión a Azure (Prisma)...');
+    await probarConexion();
 });

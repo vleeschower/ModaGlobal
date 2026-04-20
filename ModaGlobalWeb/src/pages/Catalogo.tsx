@@ -1,12 +1,12 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { Link } from 'react-router-dom'; // <-- IMPORTANTE
+import { Link } from 'react-router-dom'; 
 import Header from '../components/header'; 
 import Footer from '../components/footer';
 import ProductCard from '../components/ProductCard';
 import FilterSidebar from '../components/FilterSidebar';
 import { type Producto } from '../types/Producto';
 import { apiService } from '../services/ApiService';
-import { useAuth } from '../context/AuthContext'; // <-- Traemos la autenticación
+import { useAuth } from '../context/AuthContext';
 
 const Catalogo: React.FC = () => {
     const [productos, setProductos] = useState<Producto[]>([]);
@@ -21,7 +21,10 @@ const Catalogo: React.FC = () => {
     const [isSidebarOpen, setIsSidebarOpen] = useState(false);
     const toggleSidebar = () => setIsSidebarOpen(!isSidebarOpen);
 
-    const { isSuperAdmin, isAdmin } = useAuth(); // <-- Obtenemos si es Admin
+    // SOLUCIÓN: Extracción segura del contexto. 
+    // Si 'useAuth()' devuelve null (no hay sesión), se asigna falso por defecto.
+    const auth = useAuth();
+    const isSuperAdmin = auth?.isSuperAdmin || false;
 
     useEffect(() => {
         const fetchProductos = async () => {
@@ -62,21 +65,18 @@ const Catalogo: React.FC = () => {
 
             <main className="grow max-w-1440px mx-auto w-full px-6 md:px-16 py-12">
                 {/* ENCABEZADO CON BOTÓN DE ADMIN */}
-                <nav className="flex items-center gap-2 text-sm text-gray-400 mb-8">
-                    <Link to="/" className="hover:text-emerald-500 transition-colors">Inicio</Link>
-                    <span>/</span>
-                    <Link to="/catalogo" className="hover:text-emerald-500 transition-colors">Catálogo</Link>
-                </nav>
                 <div className="mb-10 flex flex-col md:flex-row md:justify-between md:items-end gap-4">
                     <div>
                         <h1 className="text-4xl font-black text-slate-900 tracking-tight">Nuestro Catálogo</h1>
-                        <p className="text-gray-500 mt-2 text-lg">Descubre tecnología, hogar y más.</p>
+                        <p className="text-gray-500 mt-2 text-lg">Descubre tecnología, hogar y más con envío a todo México.</p>
                     </div>
                     
-                    {/* Botón exclusivo para superadmins y Admins */}
-                    {(isSuperAdmin || isAdmin) && (
-                        <Link to="/admin/producto/nuevo" className="bg-gray-100 text-gray-600 font-bold px-4 py-2 rounded-lg text-sm hover:bg-gray-200 transition-colors flex items-center gap-2">
-                            {/* SVG de suma (+) */}
+                    {/* El botón solo se renderiza si isSuperAdmin es true */}
+                    {isSuperAdmin && (
+                        <Link 
+                            to="/admin/producto/nuevo" 
+                            className="bg-gray-100 text-gray-600 font-bold px-4 py-2 rounded-lg text-sm hover:bg-gray-200 transition-colors flex items-center gap-2"
+                        >
                             <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                                 <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
                             </svg>

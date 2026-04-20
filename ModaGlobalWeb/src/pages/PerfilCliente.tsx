@@ -110,7 +110,6 @@ const Profile: React.FC = () => {
   return (
     <div className="bg-[#F8F9FA] min-h-screen flex flex-col">
       <Header />
-
       <main className="grow">
         {/* Hero Section del Perfil */}
         <section className="relative w-full bg-linear-to-r from-primary to-primary-esmeralda overflow-hidden">
@@ -164,6 +163,7 @@ const Profile: React.FC = () => {
 
         {/* Contenido Principal */}
         <section className="max-w-1440px mx-auto px-4 sm:px-6 md:px-16 py-6 md:py-8">
+
           {/* Menú Horizontal Scroll (visible en móvil y tablet) */}
           <div className="lg:hidden mb-6">
             <div 
@@ -176,6 +176,7 @@ const Profile: React.FC = () => {
                   key={item.id}
                   onClick={() => { setActiveTab(item.id); setIsEditing(false); }}
                   className={`shrink-0 flex items-center gap-2 px-4 py-2 rounded-full transition-all ${
+
                     activeTab === item.id 
                       ? 'bg-primary text-white shadow-md' 
                       : 'bg-white text-gray-600 border border-gray-200 hover:bg-gray-50'
@@ -345,6 +346,7 @@ const Profile: React.FC = () => {
                           <div className="flex flex-col md:flex-row gap-5">
                             {/* Imagen del producto */}
                             <div className="w-full md:w-28 h-28 rounded-xl overflow-hidden shrink-0 bg-gray-100">
+
                               <img 
                                 src={pedido.img} 
                                 alt={pedido.producto}
