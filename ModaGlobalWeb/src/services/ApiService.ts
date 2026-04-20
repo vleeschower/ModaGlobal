@@ -25,6 +25,11 @@ export interface ApiResponse<T> {
   meta?: PaginatedMeta;
   message?: string;
   error?: string;
+  
+  // ✨ NUEVOS CAMPOS PARA EL PANEL DE ADMINISTRACIÓN
+  contexto?: string;
+  rol?: string;
+  tienda_actual?: string;
 }
 
 // Interfaz añadida para evitar errores de compilación en getPromocionesAdmin
@@ -145,6 +150,31 @@ export const apiService = {
     } catch (error: any) {
       console.error('Error en getProductoById:', error);
       return { success: false, message: 'No se pudo obtener el detalle del producto.' };
+    }
+  },
+
+  getProductosListaAdmin: async (page: number = 1, limit: number = 10, search: string = '', sort: string = 'newest'): Promise<ApiResponse<any[]>> => {
+    try {
+      if (!checkAuth()) {
+        return { success: false, message: 'No autenticado. Por favor inicia sesión.' };
+      }
+
+      // ✨ SE ENVIAN LA BÚSQUEDA Y EL ORDEN
+      const url = `${API_BASE_URL}/api/productos/admin/lista?page=${page}&limit=${limit}&search=${encodeURIComponent(search)}&sort=${sort}`;
+      
+      const response = await fetch(url, {
+        method: 'GET',
+        headers: getAuthHeaders(),
+      });
+      
+      if (response.status === 401 || response.status === 403) {
+        return { success: false, message: 'Sesión expirada o no tienes permisos.' };
+      }
+      
+      return await response.json();
+    } catch (error: any) {
+      console.error('Error en getProductosListaAdmin:', error);
+      return { success: false, message: 'Error de red al obtener la tabla de productos.' };
     }
   },
 

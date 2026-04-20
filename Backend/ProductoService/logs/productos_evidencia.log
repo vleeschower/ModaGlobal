@@ -123,3 +123,38 @@
 {"horaAzure":"2026-04-16T21:10:42.130Z","level":"info","message":"✅ Ping a Azure exitoso. La base de datos responde correctamente.","servicio":"ProductoService","timestamp":"2026-04-16T15:10:42Z","version":"Microsoft SQL Azure (RTM) - 12..."}
 {"level":"info","message":"Producto prod-e345ae87 creado en Base de Datos.","servicio":"ProductoService","timestamp":"2026-04-16T15:18:12Z"}
 {"level":"info","message":"Evento emitido al Bus 📢: [PRODUCTO_CREADO] para ID: prod-e345ae87","servicio":"ProductoService","timestamp":"2026-04-16T15:18:14Z"}
+{"level":"info","message":"Conectado exitosamente a Azure Service Bus (Tópico: tienda.productos)","servicio":"ProductoService","timestamp":"2026-04-19T13:37:23Z"}
+{"level":"info","message":"ProductoService desplegado en el puerto 3002","servicio":"ProductoService","timestamp":"2026-04-19T13:37:23Z"}
+{"level":"info","message":"Iniciando prueba de conexión a Azure...","servicio":"ProductoService","timestamp":"2026-04-19T13:37:23Z"}
+{"level":"info","message":"Conexión establecida exitosamente con el Pool de Azure SQL.","servicio":"ProductoService","timestamp":"2026-04-19T13:37:23Z"}
+{"horaAzure":"2026-04-19T19:37:25.540Z","level":"info","message":"✅ Ping a Azure exitoso. La base de datos responde correctamente.","servicio":"ProductoService","timestamp":"2026-04-19T13:37:24Z","version":"Microsoft SQL Azure (RTM) - 12..."}
+{"level":"info","message":"Conectado exitosamente a Azure Service Bus (Tópico: tienda.productos)","servicio":"ProductoService","timestamp":"2026-04-19T15:52:22Z"}
+{"level":"info","message":"ProductoService desplegado en el puerto 3002","servicio":"ProductoService","timestamp":"2026-04-19T15:52:22Z"}
+{"level":"info","message":"Iniciando prueba de conexión a Azure...","servicio":"ProductoService","timestamp":"2026-04-19T15:52:22Z"}
+{"level":"info","message":"Conexión establecida exitosamente con el Pool de Azure SQL.","servicio":"ProductoService","timestamp":"2026-04-19T15:52:22Z"}
+{"horaAzure":"2026-04-19T21:52:24.140Z","level":"info","message":"✅ Ping a Azure exitoso. La base de datos responde correctamente.","servicio":"ProductoService","timestamp":"2026-04-19T15:52:23Z","version":"Microsoft SQL Azure (RTM) - 12..."}
+{"level":"info","message":"Conectado exitosamente a Azure Service Bus (Tópico: tienda.productos)","servicio":"ProductoService","timestamp":"2026-04-19T16:06:14Z"}
+{"level":"info","message":"ProductoService desplegado en el puerto 3002","servicio":"ProductoService","timestamp":"2026-04-19T16:06:14Z"}
+{"level":"info","message":"Iniciando prueba de conexión a Azure...","servicio":"ProductoService","timestamp":"2026-04-19T16:06:14Z"}
+{"level":"info","message":"Conexión establecida exitosamente con el Pool de Azure SQL.","servicio":"ProductoService","timestamp":"2026-04-19T16:06:15Z"}
+{"horaAzure":"2026-04-19T22:06:16.947Z","level":"info","message":"✅ Ping a Azure exitoso. La base de datos responde correctamente.","servicio":"ProductoService","timestamp":"2026-04-19T16:06:16Z","version":"Microsoft SQL Azure (RTM) - 12..."}
+{"level":"info","message":"Conectado exitosamente a Azure Service Bus (Tópico: tienda.productos)","servicio":"ProductoService","timestamp":"2026-04-19T16:06:36Z"}
+{"level":"info","message":"ProductoService desplegado en el puerto 3002","servicio":"ProductoService","timestamp":"2026-04-19T16:06:37Z"}
+{"level":"info","message":"Iniciando prueba de conexión a Azure...","servicio":"ProductoService","timestamp":"2026-04-19T16:06:37Z"}
+{"level":"info","message":"Conexión establecida exitosamente con el Pool de Azure SQL.","servicio":"ProductoService","timestamp":"2026-04-19T16:06:37Z"}
+{"horaAzure":"2026-04-19T22:06:39.477Z","level":"info","message":"✅ Ping a Azure exitoso. La base de datos responde correctamente.","servicio":"ProductoService","timestamp":"2026-04-19T16:06:38Z","version":"Microsoft SQL Azure (RTM) - 12..."}
+{"level":"info","message":"Conectado exitosamente a Azure Service Bus (Tópico: tienda.productos)","servicio":"ProductoService","timestamp":"2026-04-19T19:44:42Z"}
+{"level":"info","message":"ProductoService desplegado en el puerto 3002","servicio":"ProductoService","timestamp":"2026-04-19T19:44:42Z"}
+{"level":"info","message":"Iniciando prueba de conexión a Azure...","servicio":"ProductoService","timestamp":"2026-04-19T19:44:42Z"}
+{"level":"info","message":"Conexión establecida exitosamente con el Pool de Azure SQL.","servicio":"ProductoService","timestamp":"2026-04-19T19:44:42Z"}
+{"horaAzure":"2026-04-20T01:44:44.197Z","level":"info","message":"✅ Ping a Azure exitoso. La base de datos responde correctamente.","servicio":"ProductoService","timestamp":"2026-04-19T19:44:43Z","version":"Microsoft SQL Azure (RTM) - 12..."}
+{"level":"info","message":"Conectado exitosamente a Azure Service Bus (Tópico: tienda.productos)","servicio":"ProductoService","timestamp":"2026-04-19T20:06:12Z"}
+{"level":"info","message":"ProductoService desplegado en el puerto 3002","servicio":"ProductoService","timestamp":"2026-04-19T20:06:12Z"}
+{"level":"info","message":"Iniciando prueba de conexión a Azure...","servicio":"ProductoService","timestamp":"2026-04-19T20:06:12Z"}
+{"level":"info","message":"Conexión establecida exitosamente con el Pool de Azure SQL.","servicio":"ProductoService","timestamp":"2026-04-19T20:06:13Z"}
+{"horaAzure":"2026-04-20T02:06:15.320Z","level":"info","message":"✅ Ping a Azure exitoso. La base de datos responde correctamente.","servicio":"ProductoService","timestamp":"2026-04-19T20:06:14Z","version":"Microsoft SQL Azure (RTM) - 12..."}
+{"level":"info","message":"Conectado exitosamente a Azure Service Bus (Tópico: tienda.productos)","servicio":"ProductoService","timestamp":"2026-04-19T20:10:32Z"}
+{"level":"info","message":"ProductoService desplegado en el puerto 3002","servicio":"ProductoService","timestamp":"2026-04-19T20:10:32Z"}
+{"level":"info","message":"Iniciando prueba de conexión a Azure...","servicio":"ProductoService","timestamp":"2026-04-19T20:10:32Z"}
+{"level":"info","message":"Conexión establecida exitosamente con el Pool de Azure SQL.","servicio":"ProductoService","timestamp":"2026-04-19T20:10:32Z"}
+{"horaAzure":"2026-04-20T02:10:34.087Z","level":"info","message":"✅ Ping a Azure exitoso. La base de datos responde correctamente.","servicio":"ProductoService","timestamp":"2026-04-19T20:10:33Z","version":"Microsoft SQL Azure (RTM) - 12..."}

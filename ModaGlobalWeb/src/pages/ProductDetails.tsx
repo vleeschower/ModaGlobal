@@ -9,7 +9,7 @@ import { useAuth } from '../context/AuthContext'; // <-- AÑADIDO: Necesario par
 
 const ProductDetails: React.FC = () => {
   const { id } = useParams<{ id: string }>();
-  const { isSuperAdmin, isAdmin } = useAuth(); // Sacamos el rol
+  const { isSuperAdmin } = useAuth(); // Sacamos el rol
 
   const [product, setProduct] = useState<Producto | null>(null);
   const [related, setRelated] = useState<Producto[]>([]);
@@ -108,7 +108,7 @@ const ProductDetails: React.FC = () => {
     <div className="bg-surface min-h-screen flex flex-col font-sans relative">
       <Header />
       
-      <main className="grow max-w-[1440px] mx-auto w-full px-6 md:px-16 py-8">
+      <main className="grow max-w-1440px mx-auto w-full px-6 md:px-16 py-8">
         {/* NAVEGACIÓN Y BOTÓN ADMIN DE EDICIÓN RÁPIDA (Unificados) */}
         <div className="flex justify-between items-center mb-8">
             <nav className="flex items-center gap-2 text-sm text-gray-400">
@@ -119,7 +119,7 @@ const ProductDetails: React.FC = () => {
                 <span className="text-slate-900 font-medium truncate">{product.nombre}</span>
             </nav>
 
-            {(isSuperAdmin || isAdmin) && (
+            {isSuperAdmin && (
                 <Link to={`/admin/producto/editar/${product.id_producto}`} className="bg-gray-100 text-gray-600 font-bold px-4 py-2 rounded-lg text-sm hover:bg-gray-200 transition-colors flex items-center gap-2">
                     <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" /></svg>
                     Editar Producto
@@ -220,7 +220,7 @@ const ProductDetails: React.FC = () => {
             </button>
           </div>
 
-          <div className="min-h-[200px]">
+          <div className="min-h-200px">
               {activeTab === 'descripcion' && (
                 <div className="max-w-3xl">
                     {product.especificaciones && product.especificaciones.length > 0 ? (
@@ -263,10 +263,10 @@ const ProductDetails: React.FC = () => {
                                     <p className="text-gray-600 text-sm leading-relaxed">{resena.comentario}</p>
                                     
                                     {/* ✨ BOTÓN ADMIN: ELIMINAR RESEÑA */}
-                                    {(isSuperAdmin || isAdmin) && (
+                                    {isSuperAdmin && (
                                         <div className="mt-4 pt-3 border-t border-red-50 flex justify-end">
                                             <button onClick={() => handleEliminarResena(resena.id_resena)} className="text-xs text-red-500 font-bold hover:underline">
-                                                Eliminar Reseña (Admin)
+                                                Eliminar Reseña (SuperAdmin)
                                             </button>
                                         </div>
                                     )}

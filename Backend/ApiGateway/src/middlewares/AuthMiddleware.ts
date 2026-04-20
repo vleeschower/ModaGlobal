@@ -32,19 +32,14 @@ export const validarAccesoGoblal = (req: AuthRequest, res: Response, next: NextF
         // Decodificamos usando nuestra interfaz segura
         const decoded = jwt.verify(token, secret) as TokenPayload;
 
-
-        // Ahora TypeScript sabe que esto es válido gracias a AuthRequest
-
         // Normalizamos el ID por si en el token de origen viene como 'id' o 'id_usuario'
         const userId = decoded.id_usuario || decoded.id || '';
 
         // Paso A: Lo guardamos en la memoria local de Express (req.user)
-
         req.user = {
             id: userId,
             rol: decoded.rol,
-
-            tienda_id: decoded.id_tienda // <-- ¡NUEVO!
+            tienda_id: decoded.id_tienda
         };
 
         // Paso B: ✨ EL TRUCO MAGISTRAL (Inyección de Headers)
@@ -55,7 +50,6 @@ export const validarAccesoGoblal = (req: AuthRequest, res: Response, next: NextF
         
         // El string vacío protege el header en caso de ser un SuperAdmin que no pertenece a una tienda física
         req.headers['x-user-tienda-id'] = decoded.id_tienda || ''; 
-
 
         next();
     } catch (error) {

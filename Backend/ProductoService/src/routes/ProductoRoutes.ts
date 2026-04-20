@@ -1,73 +1,72 @@
 import { Router } from 'express';
 import { 
-    crearProducto, 
-    actualizarProducto,
     obtenerProductos,
-    obtenerProductoPorId, 
-    eliminarProducto,
-    crearResena,
-    obtenerResenas,
     obtenerCategorias,
-    crearPromocion,
-    vincularProveedor,
+    obtenerPromocionesPublicas,
+    obtenerProductoPorId, 
+    obtenerResenas,
+    crearResena,
+    obtenerProductosAdmin,       
     obtenerPromocionesAdmin,
     guardarPromocion,
-    obtenerPromocionesPublicas
+    crearPromocion,
+    vincularProveedor,
+    crearProducto, 
+    actualizarProducto,
+    eliminarProducto
 } from '../controllers/ProductoController';
 import { verificarAccesoInterno, verificarRol } from '../middlewares/Security';
 import { upload } from '../config/Cloudinary';
 
 const router = Router();
 
-// 1. Verificamos que venga del API Gateway (Aplica a todas las rutas)
+// ==========================================
+// 1. SEGURIDAD BASE (Aplica a todas las rutas)
+// ==========================================
 router.use(verificarAccesoInterno);
 
 // ==========================================
-// RUTAS PÚBLICAS (Cualquier usuario logueado)
+// 2. RUTAS PÚBLICAS (Lectura para Clientes)
 // ==========================================
 router.get('/', obtenerProductos);
 router.get('/categorias', obtenerCategorias);
+router.get('/ofertas', obtenerPromocionesPublicas);
 
-router.get('/:id', obtenerProductoPorId);
-router.get('/:id/resenas', obtenerResenas);
-
-// --- RUTAS PROTEGIDAS (Usuarios logueados) ---
-// Aquí podrías agregar un middleware 'verificarAuth' 
+// ==========================================
+// 3. RUTAS PROTEGIDAS GENERALES (Clientes logueados)
+// ==========================================
+// Aquí asumo que la validación de usuario logueado la hace el Gateway
 router.post('/resenas', crearResena);
 
 // ==========================================
-// RUTAS DE ADMINISTRACIÓN (Operaciones diarias)
+// 4. RUTAS DE ADMINISTRACIÓN (Estáticas)
+// ⚠️ REGLA DE ORO: Las rutas estáticas SIEMPRE van antes que las dinámicas (/:id)
 // ==========================================
-//agregar un producto nuevo (POST)
-router.post('/nuevo', verificarRol(['Admin', 'SuperAdmin']), upload.array('imagenes', 5), crearProducto);
-// 🆕 Editar Producto Completo (PUT)
-router.put('/:id', verificarRol(['Admin', 'SuperAdmin']), upload.array('imagenes', 5), actualizarProducto);
-// 🆕 Eliminar Producto (DELETE)
-router.delete('/:id', verificarRol(['Admin']), eliminarProducto);
-router.post('/promociones', verificarRol(['Admin', 'SuperAdmin']), crearPromocion);
-router.post('/proveedores/vincular', verificarRol(['Admin', 'SuperAdmin']), vincularProveedor);
 
-
-router.get('/ofertas', obtenerPromocionesPublicas); 
-
-// ==========================================
-// RUTAS DE ADMINISTRACIÓN (Estáticas)
-// ==========================================
-// ✨ CORRECCIÓN: Usamos 'Administrador' y 'SuperAdministrador' completos
+// Vistas del Dashboard (SuperAdmin y Admin)
+router.get('/admin/lista', verificarRol(['Administrador', 'SuperAdministrador']), obtenerProductosAdmin);
 router.get('/promociones/admin', verificarRol(['Administrador', 'SuperAdministrador']), obtenerPromocionesAdmin);
-router.post('/promociones/admin/guardar', verificarRol(['Administrador', 'SuperAdministrador']), guardarPromocion);
 
+// Operaciones de Sucursal (SuperAdmin y Admin)
+router.post('/promociones/admin/guardar', verificarRol(['Administrador', 'SuperAdministrador']), guardarPromocion);
 router.post('/promociones', verificarRol(['Administrador', 'SuperAdministrador']), crearPromocion);
 router.post('/proveedores/vincular', verificarRol(['Administrador', 'SuperAdministrador']), vincularProveedor);
-router.post('/nuevo', verificarRol(['Administrador', 'SuperAdministrador']), upload.array('imagenes', 5), crearProducto);
-router.post('/resenas', crearResena); 
+
+// Operaciones Maestras de Catálogo (SÓLO SuperAdministrador)
+router.post('/nuevo', verificarRol(['SuperAdministrador']), upload.array('imagenes', 5), crearProducto);
+
 
 // ==========================================
-// RUTAS DINÁMICAS (Siempre al final, porque usan /:id)
+// 5. RUTAS DINÁMICAS (/:id)
+// ⚠️ Deben ir al final para no "comerse" a las rutas de arriba
 // ==========================================
+
+// Públicas dinámicas
 router.get('/:id', obtenerProductoPorId);
 router.get('/:id/resenas', obtenerResenas);
-router.put('/:id', verificarRol(['Administrador', 'SuperAdministrador']), upload.array('imagenes', 5), actualizarProducto);
-router.delete('/:id', verificarRol(['Administrador', 'SuperAdministrador']), eliminarProducto);
+
+// Operaciones Maestras de Catálogo (SÓLO SuperAdministrador)
+router.put('/:id', verificarRol(['SuperAdministrador']), upload.array('imagenes', 5), actualizarProducto);
+router.delete('/:id', verificarRol(['SuperAdministrador']), eliminarProducto);
 
 export default router;
