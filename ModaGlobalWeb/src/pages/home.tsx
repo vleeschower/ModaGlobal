@@ -25,18 +25,18 @@ const Home: React.FC = () => {
     <div className="bg-surface min-h-screen flex flex-col">
       <Header />
 
-      <main className="flex-grow">
+      <main className="grow">
         {/* Hero Section */}
-        <header className="relative w-full h-[400px] md:h-[500px] lg:h-[550px] flex items-center overflow-hidden">
+        <header className="relative w-full h-400px md:h-500px lg:h-550px flex items-center overflow-hidden">
           <div className="absolute inset-0 z-0">
             <img
               alt="Hero Accessories"
               className="w-full h-full object-cover"
               src={ImagenHome}
             />
-            <div className="absolute inset-0 bg-gradient-to-r from-primary/90 via-primary/80 to-transparent"></div>
+            <div className="absolute inset-0 bg-linear-to-r from-primary/90 via-primary/80 to-transparent"></div>
           </div>
-          <div className="relative z-10 max-w-[1440px] mx-auto px-6 md:px-16 w-full">
+          <div className="relative z-10 max-w-1440px mx-auto px-6 md:px-16 w-full">
             <div className="max-w-2xl text-white">
               <h1 className="font-headline text-3xl md:text-5xl font-extrabold tracking-tighter leading-tight mb-6">
                 Lo mejor del mundo, <br />
@@ -53,7 +53,7 @@ const Home: React.FC = () => {
 
         {/* Info Cards */}
         <section className="bg-surface-container-low py-20 px-6 md:px-16">
-          <div className="max-w-[1440px] mx-auto grid grid-cols-1 md:grid-cols-3 gap-8">
+          <div className="max-w-1440px mx-auto grid grid-cols-1 md:grid-cols-3 gap-8">
             {[
               { icon: 'store', title: 'Recoger en tienda', desc: 'Compra online y recoge lo antes posible' },
               { icon: 'headset_mic', title: 'Atención personalizada', desc: 'Expertos a tu disposición' },
@@ -74,7 +74,7 @@ const Home: React.FC = () => {
 
         {/* Daily Offers Section */}
         <section className="pb-20 px-6 md:px-16 bg-[#F8F9FA]">
-          <div className="max-w-[1440px] mx-auto">
+          <div className="max-w-1440px mx-auto">
             <div className="flex justify-between items-end mb-10">
               <h2 className="text-2xl md:text-3xl font-headline font-bold text-slate-900">Ofertas del día</h2>
               <a href="#" className="text-sm font-bold text-primary hover:text-primary-esmeralda transition-colors flex items-center gap-1">
@@ -84,8 +84,8 @@ const Home: React.FC = () => {
 
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
               {offers.map((product) => (
-                <div key={product.id} className="group bg-white rounded-3xl overflow-hidden hover:shadow-md transition-shadow duration-300 border border-gray-100 flex flex-col">
-                  <div className="aspect-[4/3] bg-[#E9ECEF] relative overflow-hidden">
+                <div key={product.id} className="group bg-white rounded-3xl overflow-hidden hover:shadow-md transition-shadow duration-300 border border-gray-100">
+                  <div className="aspect-4/3 bg-[#E9ECEF] relative overflow-hidden">
                     <img
                       src={product.img}
                       alt={product.name}
@@ -136,15 +136,15 @@ const Home: React.FC = () => {
 
         {/* Banner Section: Urban Sneaker Revolution */}
         <section className="pb-20 px-6 md:px-16 bg-[#F8F9FA]">
-          <div className="max-w-[1440px] mx-auto">
-            <div className="relative w-full h-[450px] md:h-[500px] rounded-3xl overflow-hidden shadow-2xl">
+          <div className="max-w-1440px mx-auto">
+            <div className="relative w-full h-450px md:h-500px rounded-3xl overflow-hidden shadow-2xl">
               <img
                 src="https://thehappening.com/wp-content/uploads/2024/07/fw24-lightspray-other-product-still-rgb-25.jpg"
                 alt="Urban Sneaker"
                 className="absolute inset-0 w-full h-full object-cover"
               />
+              <div className="absolute inset-0 bg-linear-to-t from-black/80 via-black/20 to-transparent"></div>
 
-              <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent"></div>
               <div className="absolute inset-0 flex flex-col justify-end p-8 md:p-16">
                 <div className="max-w-2xl">
                   <span className="text-primary-esmeralda font-bold text-xs md:text-sm tracking-widest uppercase mb-4 block">
@@ -174,12 +174,11 @@ const Home: React.FC = () => {
         </section>
 
         <section className="pb-20 px-6 md:px-16 bg-[#F8F9FA]">
-          <div className="max-w-[1440px] mx-auto text-center mb-12">
+          <div className="max-w-1440px mx-auto text-center mb-12">
             <span className="text-[12px] font-bold tracking-[0.2em] uppercase text-gray-500 block mb-2">Tendencias 2026</span>
             <h2 className="text-3xl md:text-4xl font-black font-headline text-slate-900">Estilo para cada día</h2>
           </div>
-
-          <div className="max-w-[1440px] mx-auto grid grid-cols-1 md:grid-cols-12 gap-6 h-auto md:h-[700px]">
+          <div className="max-w-1440px mx-auto grid grid-cols-1 md:grid-cols-12 gap-6 h-auto md:h-700px">
 
             {/* Card Grande: Colección Otoño/Invierno */}
             <div className="md:col-span-7 relative rounded-3xl overflow-hidden group shadow-lg">
@@ -188,8 +187,7 @@ const Home: React.FC = () => {
                 alt="Otoño Invierno"
                 className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700"
               />
-
-              <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-transparent to-transparent"></div>
+              <div className="absolute inset-0 bg-linear-to-t from-black/70 via-transparent to-transparent"></div>
 
               <div className="absolute bottom-0 left-0 p-8 md:p-12 text-white">
                 <h3 className="text-3xl md:text-4xl font-bold mb-2">Colección otoño/invierno</h3>
@@ -237,12 +235,12 @@ const Home: React.FC = () => {
         </section>
 
         <section className="pb-20 px-6 md:px-16 bg-[#F8F9FA]">
-          <div className="max-w-[1440px] mx-auto">
+          <div className="max-w-1440px mx-auto">
             <h2 className="text-3xl md:text-4xl font-black text-center mb-12 text-slate-900 tracking-tight">Lo más buscado en tecnología</h2>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 h-auto">
               {techTrends.map((tech, index) => (
-                <div key={index} className="relative h-[300px] md:h-[350px] rounded-2xl overflow-hidden group cursor-pointer shadow-md">
+                <div key={index} className="relative h-300px md:h-350px rounded-2xl overflow-hidden group cursor-pointer shadow-md">
                   <img
                     src={tech.img}
                     alt={tech.title}

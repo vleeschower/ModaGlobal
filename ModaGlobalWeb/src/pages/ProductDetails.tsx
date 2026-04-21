@@ -5,10 +5,12 @@ import { type Producto } from '../types/Producto';
 import Header from '../components/header';
 import Footer from '../components/footer';
 import ProductCard from '../components/ProductCard';
-import { useCart } from '../context/CartContext';
+import { useAuth } from '../context/AuthContext'; // <-- AÑADIDO: Necesario para extraer los roles
 
 const ProductDetails: React.FC = () => {
   const { id } = useParams<{ id: string }>();
+  const { isSuperAdmin } = useAuth(); // Sacamos el rol
+
   const [product, setProduct] = useState<Producto | null>(null);
   const [related, setRelated] = useState<Producto[]>([]);
   const [loading, setLoading] = useState(true);
@@ -75,6 +77,15 @@ const ProductDetails: React.FC = () => {
     setIsSubmitting(false);
   };
 
+  // Función base para que el botón de Admin no rompa la app
+  const handleEliminarResena = async (id_resena: any) => {
+      if(window.confirm('¿Estás seguro de que deseas eliminar esta reseña?')) {
+          // TODO: Conectar con tu apiService.eliminarResena cuando exista
+          console.log('Eliminar reseña:', id_resena);
+          alert('Función de eliminar reseña en desarrollo');
+      }
+  };
+
   const renderStars = (rating: number) => {
     return Array.from({ length: 5 }).map((_, i) => (
       <svg 
@@ -99,13 +110,23 @@ const ProductDetails: React.FC = () => {
       <Header />
       
       <main className="grow max-w-1440px mx-auto w-full px-6 md:px-16 py-8">
-        <nav className="flex items-center gap-2 text-sm text-gray-400 mb-8">
-          <Link to="/" className="hover:text-emerald-500 transition-colors">Inicio</Link>
-          <span>/</span>
-          <Link to="/catalogo" className="hover:text-emerald-500 transition-colors">Catálogo</Link>
-          <span>/</span>
-          <span className="text-slate-900 font-medium truncate">{product.nombre}</span>
-        </nav>
+        {/* NAVEGACIÓN Y BOTÓN ADMIN DE EDICIÓN RÁPIDA (Unificados) */}
+        <div className="flex justify-between items-center mb-8">
+            <nav className="flex items-center gap-2 text-sm text-gray-400">
+                <Link to="/" className="hover:text-emerald-500 transition-colors">Inicio</Link> 
+                <span>/</span> 
+                <Link to="/catalogo" className="hover:text-emerald-500 transition-colors">Catálogo</Link> 
+                <span>/</span> 
+                <span className="text-slate-900 font-medium truncate">{product.nombre}</span>
+            </nav>
+
+            {isSuperAdmin && (
+                <Link to={`/admin/producto/editar/${product.id_producto}`} className="bg-gray-100 text-gray-600 font-bold px-4 py-2 rounded-lg text-sm hover:bg-gray-200 transition-colors flex items-center gap-2">
+                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" /></svg>
+                    Editar Producto
+                </Link>
+            )}
+        </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-12 mb-20">
           {/* GALERÍA */}
@@ -241,6 +262,15 @@ const ProductDetails: React.FC = () => {
                                         <div className="flex">{renderStars(resena.calificacion)}</div>
                                     </div>
                                     <p className="text-gray-600 text-sm leading-relaxed">{resena.comentario}</p>
+                                    
+                                    {/* ✨ BOTÓN ADMIN: ELIMINAR RESEÑA */}
+                                    {isSuperAdmin && (
+                                        <div className="mt-4 pt-3 border-t border-red-50 flex justify-end">
+                                            <button onClick={() => handleEliminarResena(resena.id_resena)} className="text-xs text-red-500 font-bold hover:underline">
+                                                Eliminar Reseña (SuperAdmin)
+                                            </button>
+                                        </div>
+                                    )}
                                 </div>
                             ))
                         ) : (
@@ -315,11 +345,9 @@ const ProductDetails: React.FC = () => {
 
       {/* ✨ MODAL DE ÉXITO FLOTANTE ✨ */}
       {showSuccessModal && (
-        <div className="fixed inset-0 z-100 flex items-center justify-center bg-slate-900/40 backdrop-blur-sm p-4">
-          {/* Animación fluida de escala y sombra sin sobrecargar el navegador */}
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 backdrop-blur-sm p-4">
           <div className="bg-white rounded-3xl p-8 max-w-sm w-full text-center shadow-2xl transform transition-all scale-100 opacity-100">
             
-            {/* Ícono de checkmark animado usando Tailwind básico */}
             <div className="w-20 h-20 bg-emerald-100 text-emerald-500 rounded-full flex items-center justify-center mx-auto mb-6">
               <svg className="w-10 h-10" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
                 <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />

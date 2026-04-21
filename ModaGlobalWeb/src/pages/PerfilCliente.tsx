@@ -110,14 +110,13 @@ const Profile: React.FC = () => {
   return (
     <div className="bg-[#F8F9FA] min-h-screen flex flex-col">
       <Header />
-
-      <main className="flex-grow">
+      <main className="grow">
         {/* Hero Section del Perfil */}
-        <section className="relative w-full bg-gradient-to-r from-primary to-primary-esmeralda overflow-hidden">
+        <section className="relative w-full bg-linear-to-r from-primary to-primary-esmeralda overflow-hidden">
           <div className="absolute inset-0 opacity-5">
-            <div className="w-full h-full bg-gradient-to-r from-primary to-primary-esmeralda"></div>
+            <div className="w-full h-full bg-lineart-to-r from-primary to-primary-esmeralda"></div>
           </div>
-          <div className="relative max-w-[1440px] mx-auto px-4 sm:px-6 md:px-16 py-4 md:py-8">
+          <div className="relative max-w-1440px mx-auto px-4 sm:px-6 md:px-16 py-4 md:py-8">
             <div className="flex flex-col md:flex-row justify-between items-center gap-3">
               <div className="text-center md:text-left">
                 <div className="flex items-center gap-3 justify-center md:justify-start">
@@ -163,7 +162,8 @@ const Profile: React.FC = () => {
         </section>
 
         {/* Contenido Principal */}
-        <section className="max-w-[1440px] mx-auto px-4 sm:px-6 md:px-16 py-6 md:py-8">
+        <section className="max-w-1440px mx-auto px-4 sm:px-6 md:px-16 py-6 md:py-8">
+
           {/* Menú Horizontal Scroll (visible en móvil y tablet) */}
           <div className="lg:hidden mb-6">
             <div 
@@ -175,7 +175,8 @@ const Profile: React.FC = () => {
                 <button
                   key={item.id}
                   onClick={() => { setActiveTab(item.id); setIsEditing(false); }}
-                  className={`flex-shrink-0 flex items-center gap-2 px-4 py-2 rounded-full transition-all ${
+                  className={`shrink-0 flex items-center gap-2 px-4 py-2 rounded-full transition-all ${
+
                     activeTab === item.id 
                       ? 'bg-primary text-white shadow-md' 
                       : 'bg-white text-gray-600 border border-gray-200 hover:bg-gray-50'
@@ -344,7 +345,8 @@ const Profile: React.FC = () => {
                         <div key={pedido.id} className="p-5 md:p-6 hover:bg-gray-50 transition-colors">
                           <div className="flex flex-col md:flex-row gap-5">
                             {/* Imagen del producto */}
-                            <div className="w-full md:w-28 h-28 rounded-xl overflow-hidden flex-shrink-0 bg-gray-100">
+                            <div className="w-full md:w-28 h-28 rounded-xl overflow-hidden shrink-0 bg-gray-100">
+
                               <img 
                                 src={pedido.img} 
                                 alt={pedido.producto}
@@ -353,7 +355,7 @@ const Profile: React.FC = () => {
                             </div>
                             
                             {/* Información del pedido */}
-                            <div className="flex-grow">
+                            <div className="grow">
                               <div className="flex flex-wrap justify-between items-start gap-3 mb-3">
                                 <div>
                                   <p className="text-xs text-gray-400 mb-0.5">Pedido #{pedido.id}</p>
@@ -375,7 +377,7 @@ const Profile: React.FC = () => {
                                 </div>
                                 <div>
                                   <p className="text-gray-400 text-xs">TOTAL</p>
-                                  <p className="font-medium text-primary-esmeralda font-bold text-base">${pedido.total.toFixed(2)}</p>
+                                  <p className="font-bold text-primary-esmeralda font-bold text-base">${pedido.total.toFixed(2)}</p>
                                 </div>
                                 <div>
                                   <p className="text-gray-400 text-xs">RECOGIDA EN</p>

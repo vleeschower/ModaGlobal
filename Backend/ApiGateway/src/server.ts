@@ -1,117 +1,102 @@
 import express, { Application } from 'express';
 import cors from 'cors';
 import { createProxyMiddleware, Options } from 'http-proxy-middleware';
-import { validarAccesoGoblal } from './middlewares/AuthMiddleware';
-import { AuthRequest } from './middlewares/AuthMiddleware';
 import rateLimit from 'express-rate-limit';
 import dotenv from 'dotenv';
+import { ClientRequest } from 'http'; 
 
-// 1. SIEMPRE CONFIGURAR DOTENV AL PRINCIPIO
+import { validarAccesoGoblal, AuthRequest } from './middlewares/AuthMiddleware';
+
 dotenv.config();
 
 const app: Application = express();
 const PORT: number | string = process.env.PORT || 3000;
 
-// Habilitar CORS
 app.use(cors());
 
-// --- FUNCIÓN AUXILIAR PARA EVITAR REPETIR CÓDIGO (DRY) ---
-// Esta función configura los headers de seguridad para CUALQUIER microservicio
-const configurarHeadersSeguridad = (proxyReq: any, req: AuthRequest) => {
+// ==========================================================
+// 1. HEADER DE SEGURIDAD INTERNA
+// ==========================================================
+const configurarHeadersSeguridad = (proxyReq: ClientRequest, req: AuthRequest) => {
     const internalKey = process.env.INTERNAL_API_KEY || 'clave-secreta-interna-modaglobal';
     proxyReq.setHeader('x-api-key', internalKey);
 
     if (req.user) {
         proxyReq.setHeader('x-user-id', req.user.id);
         proxyReq.setHeader('x-user-rol', req.user.rol);
-        
-        // <-- ¡NUEVO! Propagamos la tienda al microservicio destino
         if (req.user.tienda_id) {
             proxyReq.setHeader('x-user-tienda-id', req.user.tienda_id);
         }
     }
 };
 
-// Definimos la política de bloqueo
 const limitadorSeguridad = rateLimit({
-    windowMs: 1 * 60 * 1000, // Ventana de 1 minuto
-    max: 10, // Límite de 10 peticiones por minuto 
-    standardHeaders: true, // Devuelve información de límite en los headers
+    windowMs: 1 * 60 * 1000, 
+    max: 10, 
+    standardHeaders: true, 
     legacyHeaders: false,
     handler: (req, res) => {
         console.warn(`Bloqueo por exceso de peticiones: IP ${req.ip}`); 
-        res.status(429).json({
-            error: 'Demasiadas peticiones. Por seguridad, su acceso ha sido restringido por 5 minutos.'
-        });
+        res.status(429).json({ error: 'Demasiadas peticiones. Acceso restringido por 5 minutos.' });
     },
-    // Para que el bloqueo dure 5 minutos tras el exceso:
     skipSuccessfulRequests: false, 
 });
 
-// --- CONFIGURACIÓN DE PROXYS ---
-
-// 1. Inventarios
+// ==========================================================
+// 2. CONFIGURACIÓN DE PROXYS
+// ==========================================================
 const inventarioProxyOptions: Options = {
     target: 'http://localhost:3001',
     changeOrigin: true,
     pathRewrite: { '^/api/inventario': '' },
-    on: {
-        // Usamos una función anónima para forzar el tipo que el proxy espera
-        proxyReq: (proxyReq, req, res) => configurarHeadersSeguridad(proxyReq, req as AuthRequest)
-    }
+    on: { proxyReq: (proxyReq, req, _res) => configurarHeadersSeguridad(proxyReq as ClientRequest, req as AuthRequest) }
 };
 
-// 2. Productos
 const productoProxyOptions: Options = {
     target: 'http://localhost:3002',
     changeOrigin: true,
     pathRewrite: { '^/api/productos': '' },
-    on: {
-        // Hacemos lo mismo aquí
-        proxyReq: (proxyReq, req, res) => configurarHeadersSeguridad(proxyReq, req as AuthRequest)
-    }
+    on: { proxyReq: (proxyReq, req, _res) => configurarHeadersSeguridad(proxyReq as ClientRequest, req as AuthRequest) }
 };
 
-//3. Usuarios
 const usuarioProxyOptions: Options = {
     target: 'http://localhost:3022',
     changeOrigin: true,
     pathRewrite: { '^/api/usuarios': '' },
-    on: {
-        proxyReq: (proxyReq, req, res) => configurarHeadersSeguridad(proxyReq, req as AuthRequest)
-    }
+    on: { proxyReq: (proxyReq, req, _res) => configurarHeadersSeguridad(proxyReq as ClientRequest, req as AuthRequest) }
 };
 
-// --- ASIGNACIÓN DE RUTAS ---
+const ventaProxyOptions: Options = {
+    target: 'http://localhost:3004',
+    changeOrigin: true,
+    pathRewrite: { '^/api/ventas': '' },
+    on: { proxyReq: (proxyReq, req, _res) => configurarHeadersSeguridad(proxyReq as ClientRequest, req as AuthRequest) }
+};
 
-// Login y Register - SIN validar token
+// ==========================================================
+// 3. ASIGNACIÓN DE RUTAS
+// ==========================================================
+
+// A. Rutas públicas (Login/Register)
 app.post('/api/usuarios/login', limitadorSeguridad, createProxyMiddleware(usuarioProxyOptions));
 app.post('/api/usuarios/register', limitadorSeguridad, createProxyMiddleware(usuarioProxyOptions));
 
-//Aplicamos el Rate Limit SOLO a las rutas sensibles (mutaciones)
-// Como el limitador llama a next() si todo está bien, la petición continuará su camino.
-app.post('/api/productos/nuevo', limitadorSeguridad);
+// B. Rate Limits para Mutaciones (Protección contra SPAM)
+app.post('/api/productos/admin/producto/nuevo', limitadorSeguridad); // <-- Actualizado
+app.put('/api/productos/admin/producto/editar/*', limitadorSeguridad); // <-- Actualizado
 app.post('/api/productos/promociones', limitadorSeguridad);
 app.post('/api/productos/proveedores/vincular', limitadorSeguridad);
-app.delete('/api/productos/:id', limitadorSeguridad); // Protege cualquier borrado
+app.post('/api/productos/resenas', limitadorSeguridad);
+app.delete('/api/productos/:id', limitadorSeguridad);
 
-// Todas las peticiones (hayan pasado por el limitador o no) llegan aquí.
-// Se validan con el JWT y se envían a su microservicio correspondiente.
+// C. ENRUTADOR MAESTRO OMNICANAL
 app.use('/api/usuarios', validarAccesoGoblal, createProxyMiddleware(usuarioProxyOptions));
-app.use('/api/inventario', validarAccesoGoblal, createProxyMiddleware(inventarioProxyOptions));
+app.use('/api/venta', validarAccesoGoblal, createProxyMiddleware(ventaProxyOptions));
 app.use('/api/productos', validarAccesoGoblal, createProxyMiddleware(productoProxyOptions));
 
-// Rutas futuras (Sigue el mismo patrón)
-// app.use('/api/ventas', validarAccesoGoblal, ...);
-
-// Esto está perfecto. Fíjate que le pasamos el limitador como si fuera un middleware.
-app.use('/api/productos/nuevo', limitadorSeguridad);
-app.use('/api/productos/promociones', limitadorSeguridad);
-app.use('/api/productos/proveedores/vincular', limitadorSeguridad);
-app.use('/api/productos/resenas', limitadorSeguridad); // Buena idea limitar la creación de reseñas para evitar SPAM
-
-
+// ==========================================================
+// 4. INICIO DEL SERVIDOR
+// ==========================================================
 app.listen(PORT, () => {
     console.log(`[API Gateway] Fortaleza iniciada en puerto ${PORT}`);
-    console.log(`[Seguridad] Llave interna cargada: ${process.env.INTERNAL_API_KEY ? 'SÍ' : 'NO'}`);
 });

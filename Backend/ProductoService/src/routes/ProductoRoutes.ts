@@ -1,56 +1,64 @@
 import { Router } from 'express';
 import { 
-    crearProducto,
-    actualizarProducto,
     obtenerProductos,
-    obtenerProductoPorId, 
-    eliminarProducto,
-    crearResena,
-    obtenerResenas,
     obtenerCategorias,
+    obtenerPromocionesPublicas,
+    obtenerProductoPorId, 
+    obtenerResenas,
+    crearResena,
+    obtenerProductosAdmin,        
+    obtenerPromocionesAdmin,
+    guardarPromocion,
     crearPromocion,
-    vincularProveedor
+    vincularProveedor,
+    crearProducto, 
+    actualizarProducto,
+    eliminarProducto
 } from '../controllers/ProductoController';
-import { verificarAccesoInterno, verificarRol } from '../middlewares/Security';
+import { verificarApiKey, verificarAccesoInterno, verificarRol } from '../middlewares/Security';
 import { upload } from '../config/Cloudinary';
 
 const router = Router();
 
-// 1. Verificamos que venga del API Gateway (Aplica a todas las rutas)
-router.use(verificarAccesoInterno);
+// ==========================================
+// 1. SEGURIDAD ZERO TRUST (Solo valida que venga del API Gateway)
+// ==========================================
+router.use(verificarApiKey); // ✅ ESTA ES LA CLAVE PARA PERMITIR INVITADOS
 
 // ==========================================
-// RUTAS PÚBLICAS (Cualquier usuario logueado)
+// 2. RUTAS PÚBLICAS (Lectura para Clientes/Invitados)
 // ==========================================
 router.get('/', obtenerProductos);
 router.get('/categorias', obtenerCategorias);
-
+router.get('/ofertas', obtenerPromocionesPublicas);
 router.get('/:id', obtenerProductoPorId);
 router.get('/:id/resenas', obtenerResenas);
 
-// --- RUTAS PROTEGIDAS (Usuarios logueados) ---
-// Aquí podrías agregar un middleware 'verificarAuth' 
+// ==========================================
+// 3. BARRERA DE SESIÓN (De aquí hacia abajo, EXIGEN estar logueado)
+// ==========================================
+router.use(verificarAccesoInterno); 
+
+// ==========================================
+// 4. RUTAS PROTEGIDAS GENERALES (Clientes logueados)
+// ==========================================
 router.post('/resenas', crearResena);
 
-
 // ==========================================
-// RUTAS DE ADMINISTRACIÓN (Operaciones diarias)
+// 5. RUTAS DE ADMINISTRACIÓN (Estáticas)
 // ==========================================
+// Vistas del Dashboard
+router.get('/admin/lista', verificarRol(['Administrador', 'SuperAdministrador']), obtenerProductosAdmin);
+router.get('/promociones/admin', verificarRol(['Administrador', 'SuperAdministrador']), obtenerPromocionesAdmin);
 
-router.post('/nuevo', verificarRol(['Admin', 'SuperAdmin']), upload.single('imagen'), crearProducto);
-router.post('/promociones', verificarRol(['Admin', 'SuperAdmin']), crearPromocion);
-router.post('/proveedores/vincular', verificarRol(['Admin', 'SuperAdmin']), vincularProveedor);
-router.delete('/:id', verificarRol(['Admin', 'SuperAdmin']), eliminarProducto);
+// Operaciones de Sucursal
+router.post('/promociones/admin/guardar', verificarRol(['Administrador', 'SuperAdministrador']), guardarPromocion);
+router.post('/promociones', verificarRol(['Administrador', 'SuperAdministrador']), crearPromocion);
+router.post('/proveedores/vincular', verificarRol(['Administrador', 'SuperAdministrador']), vincularProveedor);
 
-//agregar un producto nuevo (POST)
-router.post('/nuevo', verificarRol(['Admin', 'SuperAdmin']), upload.array('imagenes', 5), crearProducto);
-// 🆕 Editar Producto Completo (PUT)
-router.put('/:id', verificarRol(['Admin', 'SuperAdmin']), upload.array('imagenes', 5), actualizarProducto);
-// 🆕 Eliminar Producto (DELETE)
-router.delete('/:id', verificarRol(['Admin']), eliminarProducto);
-router.post('/promociones', verificarRol(['Admin', 'SuperAdmin']), crearPromocion);
-router.post('/proveedores/vincular', verificarRol(['Admin', 'SuperAdmin']), vincularProveedor);
-
-
+// Operaciones Maestras de Catálogo
+router.post('/admin/producto/nuevo', verificarRol(['SuperAdministrador']), upload.array('imagenes', 5), crearProducto);
+router.put('/admin/producto/editar/:id', verificarRol(['SuperAdministrador']), upload.array('imagenes', 5), actualizarProducto);
+router.delete('/:id', verificarRol(['SuperAdministrador']), eliminarProducto);
 
 export default router;

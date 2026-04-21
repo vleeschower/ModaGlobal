@@ -92,7 +92,7 @@ const DashboardHome: React.FC = () => {
       <div className="p-4 md:p-8 max-w-7xl mx-auto space-y-8">
         
         {/* Header de Bienvenida */}
-        <section className="bg-gradient-to-r from-primary to-primary-esmeralda rounded-2xl p-6 md:p-8 text-white">
+        <section className="bg-linear-to-r from-primary to-primary-esmeralda rounded-2xl p-6 md:p-8 text-white">
           <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
             <div>
               <p className="text-white/80 text-sm mb-1">{getWelcomeMessage()}</p>

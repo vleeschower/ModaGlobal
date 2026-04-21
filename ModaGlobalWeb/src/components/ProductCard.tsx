@@ -10,7 +10,7 @@ interface ProductCardProps {
 
 const ProductCard: React.FC<ProductCardProps> = ({ product }) => {
     const imageUrl = product.imagen_url || 'https://via.placeholder.com/500?text=Sin+Imagen';
-    const { isAdmin } = useAuth();
+    const { isSuperAdmin } = useAuth();
     
     // Estados para el Modal de Eliminación
     const [showDeleteModal, setShowDeleteModal] = useState(false);
@@ -82,7 +82,7 @@ const ProductCard: React.FC<ProductCardProps> = ({ product }) => {
                 </button>
 
                 {/* PANEL DE ADMIN FLOTANTE */}
-                {isAdmin && (
+                {isSuperAdmin && (
                     <div className="absolute top-2 right-2 flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity duration-300">
                         <Link 
                             to={`/admin/producto/editar/${product.id_producto}`} 

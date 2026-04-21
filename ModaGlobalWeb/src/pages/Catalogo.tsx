@@ -1,12 +1,12 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { Link } from 'react-router-dom'; // <-- IMPORTANTE
+import { Link } from 'react-router-dom'; 
 import Header from '../components/header'; 
 import Footer from '../components/footer';
 import ProductCard from '../components/ProductCard';
 import FilterSidebar from '../components/FilterSidebar';
 import { type Producto } from '../types/Producto';
 import { apiService } from '../services/ApiService';
-import { useAuth } from '../context/AuthContext'; // <-- Traemos la autenticación
+import { useAuth } from '../context/AuthContext';
 
 const Catalogo: React.FC = () => {
     const [productos, setProductos] = useState<Producto[]>([]);
@@ -21,7 +21,10 @@ const Catalogo: React.FC = () => {
     const [isSidebarOpen, setIsSidebarOpen] = useState(false);
     const toggleSidebar = () => setIsSidebarOpen(!isSidebarOpen);
 
-    const { isAdmin } = useAuth(); // <-- Obtenemos si es Admin
+    // SOLUCIÓN: Extracción segura del contexto. 
+    // Si 'useAuth()' devuelve null (no hay sesión), se asigna falso por defecto.
+    const auth = useAuth();
+    const isSuperAdmin = auth?.isSuperAdmin || false;
 
     useEffect(() => {
         const fetchProductos = async () => {
@@ -68,14 +71,13 @@ const Catalogo: React.FC = () => {
                         <p className="text-gray-500 mt-2 text-lg">Descubre tecnología, hogar y más con envío a todo México.</p>
                     </div>
                     
-                    {/* Botón exclusivo para Admins */}
-                    {isAdmin && (
+                    {/* El botón solo se renderiza si isSuperAdmin es true */}
+                    {isSuperAdmin && (
                         <Link 
                             to="/admin/producto/nuevo" 
-                            className="bg-emerald-500 text-white px-6 py-3 rounded-xl font-bold flex items-center gap-2 hover:bg-emerald-600 transition-colors shadow-lg active:scale-95"
+                            className="bg-gray-100 text-gray-600 font-bold px-4 py-2 rounded-lg text-sm hover:bg-gray-200 transition-colors flex items-center gap-2"
                         >
-                            {/* SVG de suma (+) */}
-                            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor" className="w-5 h-5">
+                            <svg xmlns="http://www.w3.org/2000/svg" className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                                 <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
                             </svg>
                             Agregar Producto

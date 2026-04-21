@@ -86,7 +86,8 @@ const PerfilDashboard: React.FC = () => {
         <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
           
           {/* Banner de fondo con gradiente */}
-          <div className="bg-gradient-to-r from-primary to-primary-esmeralda px-4 sm:px-6 md:px-8 pt-6 sm:pt-8 pb-8 sm:pb-10">
+          <div className="bg-linear-to-r from-primary to-primary-esmeralda px-4 sm:px-6 md:px-8 pt-6 sm:pt-8 pb-8 sm:pb-10">
+
             <div className="flex flex-col sm:flex-row sm:items-center gap-4 sm:gap-6">
               {/* Avatar */}
               <div className="w-16 h-16 sm:w-15 sm:h-15 md:w-19 md:h-19 rounded-xl sm:rounded-2xl bg-white shadow-lg flex items-center justify-center">
@@ -95,7 +96,8 @@ const PerfilDashboard: React.FC = () => {
               
               {/* Nombre y rol */}
               <div>
-                <h2 className="text-white text-xl sm:text-2xl md:text-3xl font-bold break-words">
+                <h2 className="text-white text-xl sm:text-2xl md:text-3xl font-bold grap-break-word">
+
                   {user.nombre}
                 </h2>
                 <span className="inline-flex px-3 py-1 rounded-full text-xs font-semibold bg-white/20 text-white mt-2">
@@ -154,7 +156,7 @@ const PerfilDashboard: React.FC = () => {
                       className="w-full border border-gray-200 rounded-xl px-3 sm:px-4 py-1.5 sm:py-2 text-sm focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary transition-all"
                     />
                   ) : (
-                    <p className="text-gray-800 font-medium text-sm sm:text-base break-words">
+                    <p className="text-gray-800 font-medium text-sm sm:text-base grap-break-word">
                       {user.nombre}
                     </p>
                   )}

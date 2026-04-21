@@ -1,5 +1,5 @@
 // src/services/ventas.service.ts
-import { PrismaClient } from '@prisma/client';
+import { PrismaClient, Prisma } from '@prisma/client'; // <-- 1. Importamos Prisma aquí
 
 const prisma = new PrismaClient();
 
@@ -24,7 +24,8 @@ export const actualizarEstadoVenta = async (
   }
 
   // 3. Transaccion: Se ejecutan ambas operaciones o ninguna
-  const resultado = await prisma.$transaction(async (tx) => {
+  // <-- 2. Le asignamos el tipo explícito a 'tx'
+  const resultado = await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
     
     // A) Actualizar la tabla de ventas
     const ventaActualizada = await tx.ventas.update({
