@@ -2,8 +2,11 @@ import React from 'react';
 import Header from '../components/header';
 import Footer from '../components/footer';
 import ImagenHome from '../assets/imagenHome.jpg';
+import { useCart } from '../context/CartContext'; // <-- Importamos el contexto del carrito
 
 const Home: React.FC = () => {
+  const { addToCart } = useCart(); // <-- Sacamos la función para agregar
+
   const offers = [
     { id: 1, name: 'Aura Sound Max', desc: 'Audífonos inalámbricos de lujo', price: 349.00, oldPrice: 410.00, discount: '-20%', img: 'https://images.unsplash.com/photo-1505740420928-5e560c06d30e?q=80&w=1000&auto=format&fit=crop' },
     { id: 2, name: 'Nexus Watch Elite', desc: 'Reloj inteligente premium', price: 299.00, oldPrice: 343.85, discount: '-15%', img: 'https://images.unsplash.com/photo-1523275335684-37898b6baf30?q=80&w=1000&auto=format&fit=crop' },
@@ -19,7 +22,6 @@ const Home: React.FC = () => {
   ];
 
   return (
-
     <div className="bg-surface min-h-screen flex flex-col">
       <Header />
 
@@ -82,7 +84,7 @@ const Home: React.FC = () => {
 
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
               {offers.map((product) => (
-                <div key={product.id} className="group bg-white rounded-3xl overflow-hidden hover:shadow-md transition-shadow duration-300 border border-gray-100">
+                <div key={product.id} className="group bg-white rounded-3xl overflow-hidden hover:shadow-md transition-shadow duration-300 border border-gray-100 flex flex-col">
                   <div className="aspect-[4/3] bg-[#E9ECEF] relative overflow-hidden">
                     <img
                       src={product.img}
@@ -91,18 +93,39 @@ const Home: React.FC = () => {
                     />
                   </div>
 
-                  <div className="p-5">
+                  <div className="p-5 flex flex-col flex-grow">
                     <div className="flex justify-between items-start mb-1">
                       <h4 className="font-bold text-slate-800 text-sm md:text-base">{product.name}</h4>
                       <span className="bg-red-50 text-red-500 text-[10px] font-bold px-2 py-0.5 rounded uppercase">
                         {product.discount}
                       </span>
                     </div>
-                    <p className="text-gray-400 text-xs mb-4">{product.desc}</p>
+                    <p className="text-gray-400 text-xs mb-4 flex-grow">{product.desc}</p>
 
-                    <div className="flex items-center gap-2">
-                      <span className="text-primary-esmeralda font-black text-lg">${product.price.toFixed(2)}</span>
-                      <span className="text-gray-400 line-through text-xs">${product.oldPrice.toFixed(2)}</span>
+                    <div className="flex flex-col gap-3 mt-auto">
+                      <div className="flex items-center gap-2">
+                        <span className="text-primary-esmeralda font-black text-lg">${product.price.toFixed(2)}</span>
+                        <span className="text-gray-400 line-through text-xs">${product.oldPrice.toFixed(2)}</span>
+                      </div>
+                      
+                      {/* 👇 EL BOTÓN DE AGREGAR AL CARRITO 👇 */}
+                      <button 
+                        onClick={(e) => {
+                          e.preventDefault(); // Por si a futuro envolvemos esto en un Link
+                          addToCart({
+                            id_producto: `oferta-${product.id}`,
+                            nombre: product.name,
+                            precio_base: product.price,
+                            imagen_url: product.img,
+                            id_categoria: 'ofertas',
+                            sku: `OFERTA-00${product.id}`
+                          } as any, 1);
+                        }}
+                        className="w-full bg-gray-50 text-slate-800 border border-gray-200 py-2.5 rounded-xl font-bold text-sm hover:bg-emerald-500 hover:text-white hover:border-emerald-500 transition-all flex items-center justify-center gap-2 mt-2"
+                      >
+                        <span className="material-symbols-outlined text-[18px]">shopping_cart</span>
+                        Agregar
+                      </button>
                     </div>
                   </div>
                 </div>
@@ -194,7 +217,6 @@ const Home: React.FC = () => {
               </div>
 
               {/* Card Inferior: Accesorios Premium */}
-
               <div className="relative flex-1 rounded-3xl overflow-hidden group shadow-lg">
                 <img
                   src="https://images.unsplash.com/photo-1547949003-9792a18a2601?q=80&w=1000&auto=format&fit=crop"

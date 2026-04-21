@@ -3,6 +3,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import Swal from 'sweetalert2';
 import logoImg from '../assets/logom.png';
+import { useCart } from '../context/CartContext';
 
 interface HeaderProps {
   toggleSidebar?: () => void;
@@ -13,6 +14,7 @@ const Header: React.FC<HeaderProps> = ({ toggleSidebar }) => {
   const navigate = useNavigate();
   const [isOpen, setIsOpen] = useState(false);
   const [isProfileOpen, setIsProfileOpen] = useState(false);
+  const { totalItems } = useCart(); // <-- Aquí sacamos el número total del carrito
 
   const navLinks = [
     { name: 'Ropa', href: '#' },
@@ -95,10 +97,21 @@ const Header: React.FC<HeaderProps> = ({ toggleSidebar }) => {
 
         <div className="flex items-center gap-1 md:gap-4 text-white shrink-0">
           
-          <button className="p-2 hover:bg-white/10 hover:text-primary-esmeralda rounded-full transition-all active:scale-90 relative">
+          
+          <Link 
+            to="/carrito" 
+            className="p-2 hover:bg-white/10 hover:text-primary-esmeralda rounded-full transition-all active:scale-90 relative flex items-center justify-center"
+          >
             <span className="material-symbols-outlined text-2xl">shopping_cart</span>
-          </button>
-
+            
+            {/* Globito rojo con el contador */}
+            {totalItems > 0 && (
+              <span className="absolute top-0 right-0 bg-red-500 text-white text-[10px] font-bold w-4 h-4 flex items-center justify-center rounded-full shadow-sm">
+                {totalItems}
+              </span>
+            )}
+          </Link>
+    
           {/* Perfil - Solo muestra dropdown si está autenticado */}
           <div className="relative">
             {isAuthenticated ? (

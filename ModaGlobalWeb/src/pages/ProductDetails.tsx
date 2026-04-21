@@ -5,6 +5,7 @@ import { type Producto } from '../types/Producto';
 import Header from '../components/header';
 import Footer from '../components/footer';
 import ProductCard from '../components/ProductCard';
+import { useCart } from '../context/CartContext';
 
 const ProductDetails: React.FC = () => {
   const { id } = useParams<{ id: string }>();
@@ -14,6 +15,7 @@ const ProductDetails: React.FC = () => {
   const [quantity, setQuantity] = useState(1);
   const [activeTab, setActiveTab] = useState<'descripcion' | 'resenas'>('descripcion');
   const [mainImage, setMainImage] = useState<string>('');
+  const { addToCart } = useCart();
 
   // Estados Formulario
   const [newReviewRating, setNewReviewRating] = useState(0);
@@ -125,7 +127,7 @@ const ProductDetails: React.FC = () => {
                 {product.galeria.map((img, idx) => (
                   <button 
                     key={idx}
-                    onClick={() => setMainImage(img.imagen_url)}
+                    onClick={() => addToCart(product, quantity)}
                     className={`w-20 h-20 shrink-0 rounded-xl overflow-hidden border-2 transition-all ${mainImage === img.imagen_url ? 'border-emerald-500 shadow-md' : 'border-transparent hover:border-gray-200'}`}
                   >
                     <img src={img.imagen_url} alt={`Vista ${idx + 1}`} className="w-full h-full object-cover" />
