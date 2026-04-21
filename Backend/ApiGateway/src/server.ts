@@ -83,7 +83,7 @@ app.post('/api/usuarios/register', limitadorSeguridad, createProxyMiddleware(usu
 
 // B. Rate Limits para Mutaciones (Protección contra SPAM)
 app.post('/api/productos/admin/producto/nuevo', limitadorSeguridad); // <-- Actualizado
-app.put('/api/productos/admin/producto/editar/*', limitadorSeguridad); // <-- Actualizado
+app.put('/api/productos/admin/producto/editar/:id', limitadorSeguridad); // <-- Actualizado
 app.post('/api/productos/promociones', limitadorSeguridad);
 app.post('/api/productos/proveedores/vincular', limitadorSeguridad);
 app.post('/api/productos/resenas', limitadorSeguridad);

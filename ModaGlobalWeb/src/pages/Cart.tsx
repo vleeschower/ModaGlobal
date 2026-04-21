@@ -108,7 +108,7 @@ const Cart: React.FC = () => {
               </div>
             </div>
 
-            {/* TARJETA DE RESUMEN (Sticky para que baje contigo) */}
+            {/* TARJETA DE RESUMEN */}
             <div className="w-full lg:w-1/3 bg-white rounded-3xl p-6 md:p-8 shadow-sm border border-gray-100 sticky top-24">
               <h2 className="text-xl font-bold text-slate-900 mb-6">Resumen del pedido</h2>
               

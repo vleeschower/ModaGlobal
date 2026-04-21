@@ -5,11 +5,13 @@ import { type Producto } from '../types/Producto';
 import Header from '../components/header';
 import Footer from '../components/footer';
 import ProductCard from '../components/ProductCard';
-import { useAuth } from '../context/AuthContext'; // <-- AÑADIDO: Necesario para extraer los roles
+import { useAuth } from '../context/AuthContext'; // Para roles
+import { useCart } from '../context/CartContext'; // Tu lógica de carrito
 
 const ProductDetails: React.FC = () => {
   const { id } = useParams<{ id: string }>();
-  const { isSuperAdmin } = useAuth(); // Sacamos el rol
+  const { isSuperAdmin } = useAuth(); // Sacamos si es admin
+  const { addToCart } = useCart(); // Tu función de carrito
 
   const [product, setProduct] = useState<Producto | null>(null);
   const [related, setRelated] = useState<Producto[]>([]);
@@ -17,21 +19,17 @@ const ProductDetails: React.FC = () => {
   const [quantity, setQuantity] = useState(1);
   const [activeTab, setActiveTab] = useState<'descripcion' | 'resenas'>('descripcion');
   const [mainImage, setMainImage] = useState<string>('');
-  const { addToCart } = useCart();
 
-  // Estados Formulario
+  // Estados Formulario Reseña
   const [newReviewRating, setNewReviewRating] = useState(0);
   const [newReviewText, setNewReviewText] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [reviewMessage, setReviewMessage] = useState<{type: 'error', text: string} | null>(null);
-  
-  // ✨ NUEVO ESTADO: Controla la visibilidad del Modal de Éxito
   const [showSuccessModal, setShowSuccessModal] = useState(false);
 
-  // ✨ MEJORA: Agregamos el parámetro 'showSpinner' para recargas silenciosas
   const loadData = async (showSpinner = true) => {
     if (!id) return;
-    if (showSpinner) setLoading(true); // Solo mostramos la pantalla de carga si es necesario
+    if (showSpinner) setLoading(true);
     
     const res = await apiService.getProductoById(id);
     
@@ -48,50 +46,41 @@ const ProductDetails: React.FC = () => {
   };
 
   useEffect(() => {
-    loadData(true); // Al entrar a la página por primera vez, SÍ queremos el spinner
+    loadData(true);
     window.scrollTo(0, 0);
   }, [id]);
 
   const handleSubmitReview = async (e: React.FormEvent) => {
     e.preventDefault();
     if (newReviewRating === 0) {
-        setReviewMessage({ type: 'error', text: 'Por favor, selecciona una calificación (estrellas).' });
+        setReviewMessage({ type: 'error', text: 'Por favor, selecciona una calificación.' });
         return;
     }
-    if (!id) return;
-
     setIsSubmitting(true);
-    setReviewMessage(null);
-
-    const res = await apiService.crearResena(id, newReviewRating, newReviewText);
-    
+    const res = await apiService.crearResena(id!, newReviewRating, newReviewText);
     if (res.success) {
-        // ✨ MAGIA UX: Limpiamos el formulario, mostramos el modal y recargamos los datos en silencio
         setNewReviewText('');
         setNewReviewRating(0);
         setShowSuccessModal(true); 
-        loadData(false); // <-- false = Recarga Silenciosa de las estrellas y los comentarios
+        loadData(false); // Recarga silenciosa
     } else {
-        setReviewMessage({ type: 'error', text: res.message || 'Error al publicar la reseña.' });
+        setReviewMessage({ type: 'error', text: res.message || 'Error al publicar.' });
     }
     setIsSubmitting(false);
   };
 
-  // Función base para que el botón de Admin no rompa la app
   const handleEliminarResena = async (id_resena: any) => {
       if(window.confirm('¿Estás seguro de que deseas eliminar esta reseña?')) {
-          // TODO: Conectar con tu apiService.eliminarResena cuando exista
           console.log('Eliminar reseña:', id_resena);
           alert('Función de eliminar reseña en desarrollo');
+          // Aquí iría: await apiService.eliminarResena(id_resena); loadData(false);
       }
   };
 
   const renderStars = (rating: number) => {
     return Array.from({ length: 5 }).map((_, i) => (
-      <svg 
-        key={i} xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" 
-        className={`w-4 h-4 ${i < Math.round(rating) ? 'text-amber-400' : 'text-gray-300'}`}
-      >
+      <svg key={i} xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" 
+        className={`w-4 h-4 ${i < Math.round(rating) ? 'text-amber-400' : 'text-gray-300'}`}>
         <path fillRule="evenodd" d="M10.788 3.21c.448-1.077 1.976-1.077 2.424 0l2.082 5.006 5.404.434c1.164.093 1.636 1.545.749 2.305l-4.117 3.527 1.257 5.273c.271 1.136-.964 2.033-1.96 1.425L12 18.354 7.373 21.18c-.996.608-2.231-.29-1.96-1.425l1.257-5.273-4.117-3.527c-.887-.76-.415-2.212.749-2.305l5.404-.434 2.082-5.006z" clipRule="evenodd" />
       </svg>
     ));
@@ -103,14 +92,23 @@ const ProductDetails: React.FC = () => {
     </div>
   );
 
-  if (!product) return <div className="p-20 text-center font-sans text-slate-800">Producto no encontrado en el catálogo.</div>;
+  if (!product) return (
+    <div className="min-h-screen flex flex-col font-sans">
+      <Header />
+      <div className="flex-1 flex flex-col items-center justify-center p-6 text-center text-slate-800">
+        <h2 className="text-2xl font-black mb-2">Producto no encontrado</h2>
+        <Link to="/catalogo" className="text-emerald-500 font-bold hover:underline">Volver al catálogo</Link>
+      </div>
+      <Footer />
+    </div>
+  );
 
   return (
     <div className="bg-surface min-h-screen flex flex-col font-sans relative">
       <Header />
       
       <main className="grow max-w-1440px mx-auto w-full px-6 md:px-16 py-8">
-        {/* NAVEGACIÓN Y BOTÓN ADMIN DE EDICIÓN RÁPIDA (Unificados) */}
+        {/* NAVEGACIÓN Y BOTÓN ADMIN */}
         <div className="flex justify-between items-center mb-8">
             <nav className="flex items-center gap-2 text-sm text-gray-400">
                 <Link to="/" className="hover:text-emerald-500 transition-colors">Inicio</Link> 
@@ -148,7 +146,7 @@ const ProductDetails: React.FC = () => {
                 {product.galeria.map((img, idx) => (
                   <button 
                     key={idx}
-                    onClick={() => addToCart(product, quantity)}
+                    onClick={() => setMainImage(img.imagen_url)}
                     className={`w-20 h-20 shrink-0 rounded-xl overflow-hidden border-2 transition-all ${mainImage === img.imagen_url ? 'border-emerald-500 shadow-md' : 'border-transparent hover:border-gray-200'}`}
                   >
                     <img src={img.imagen_url} alt={`Vista ${idx + 1}`} className="w-full h-full object-cover" />
@@ -193,7 +191,10 @@ const ProductDetails: React.FC = () => {
                   <span className="px-6 font-bold text-slate-900 w-12 text-center">{quantity}</span>
                   <button onClick={() => setQuantity(q => q+1)} className="px-5 h-full hover:bg-gray-200 transition-colors font-bold">+</button>
                 </div>
-                <button className="flex-1 h-14 bg-slate-900 text-white rounded-2xl font-bold hover:bg-emerald-500 transition-all shadow-xl shadow-slate-900/10 flex items-center justify-center gap-3 active:scale-95">
+                <button 
+                  onClick={() => addToCart(product, quantity)}
+                  className="flex-1 h-14 bg-slate-900 text-white rounded-2xl font-bold hover:bg-emerald-500 transition-all shadow-xl shadow-slate-900/10 flex items-center justify-center gap-3 active:scale-95"
+                >
                   <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-5 h-5">
                     <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 3h1.386c.51 0 .955.343 1.087.835l.383 1.437M7.5 14.25a3 3 0 0 0-3 3h15.75m-12.75-3h11.218c1.121-2.3 2.1-4.684 2.924-7.138a60.114 60.114 0 0 0-16.536-1.84M7.5 14.25 5.106 5.272M6 20.25a.75.75 0 1 1-1.5 0 .75.75 0 0 1 1.5 0Zm12.75 0a.75.75 0 1 1-1.5 0 .75.75 0 0 1 1.5 0Z" />
                   </svg>
@@ -207,16 +208,12 @@ const ProductDetails: React.FC = () => {
         {/* TABS */}
         <section className="mb-20">
           <div className="flex border-b border-gray-200 gap-8 mb-8">
-            <button 
-                onClick={() => setActiveTab('descripcion')}
-                className={`pb-4 font-bold transition-all ${activeTab === 'descripcion' ? 'border-b-2 border-emerald-500 text-slate-900' : 'text-gray-400 hover:text-slate-600'}`}
-            >
+            <button onClick={() => setActiveTab('descripcion')}
+                className={`pb-4 font-bold transition-all ${activeTab === 'descripcion' ? 'border-b-2 border-emerald-500 text-slate-900' : 'text-gray-400 hover:text-slate-600'}`}>
                 Especificaciones
             </button>
-            <button 
-                onClick={() => setActiveTab('resenas')}
-                className={`pb-4 font-bold transition-all ${activeTab === 'resenas' ? 'border-b-2 border-emerald-500 text-slate-900' : 'text-gray-400 hover:text-slate-600'}`}
-            >
+            <button onClick={() => setActiveTab('resenas')}
+                className={`pb-4 font-bold transition-all ${activeTab === 'resenas' ? 'border-b-2 border-emerald-500 text-slate-900' : 'text-gray-400 hover:text-slate-600'}`}>
                 Reseñas ({product.rating?.total || 0})
             </button>
           </div>
@@ -238,7 +235,7 @@ const ProductDetails: React.FC = () => {
                             </table>
                         </div>
                     ) : (
-                        <p className="text-gray-500 italic">No hay especificaciones técnicas registradas para este producto.</p>
+                        <p className="text-gray-500 italic">No hay especificaciones registradas.</p>
                     )}
                 </div>
               )}
@@ -263,7 +260,6 @@ const ProductDetails: React.FC = () => {
                                     </div>
                                     <p className="text-gray-600 text-sm leading-relaxed">{resena.comentario}</p>
                                     
-                                    {/* ✨ BOTÓN ADMIN: ELIMINAR RESEÑA */}
                                     {isSuperAdmin && (
                                         <div className="mt-4 pt-3 border-t border-red-50 flex justify-end">
                                             <button onClick={() => handleEliminarResena(resena.id_resena)} className="text-xs text-red-500 font-bold hover:underline">
@@ -275,7 +271,7 @@ const ProductDetails: React.FC = () => {
                             ))
                         ) : (
                             <div className="text-center py-10 bg-gray-50 rounded-2xl border border-dashed border-gray-200">
-                                <p className="text-gray-500">Aún no hay reseñas para este producto.</p>
+                                <p className="text-gray-500">Aún no hay reseñas.</p>
                             </div>
                         )}
                     </div>
@@ -283,42 +279,19 @@ const ProductDetails: React.FC = () => {
                     <div className="lg:col-span-1">
                         <div className="bg-gray-50 p-6 rounded-3xl border border-gray-200 sticky top-24">
                             <h3 className="font-bold text-slate-900 text-lg mb-4">Deja tu opinión</h3>
-                            
-                            {reviewMessage && reviewMessage.type === 'error' && (
-                                <div className="p-3 rounded-lg mb-4 text-sm font-bold bg-red-100 text-red-600">
-                                    {reviewMessage.text}
-                                </div>
-                            )}
-
+                            {reviewMessage && <div className="p-3 rounded-lg mb-4 text-sm font-bold bg-red-100 text-red-600">{reviewMessage.text}</div>}
                             <form onSubmit={handleSubmitReview} className="space-y-4">
-                                <div>
-                                    <p className="text-sm font-medium text-slate-700 mb-2">Calificación</p>
-                                    <div className="flex gap-1">
-                                        {[1, 2, 3, 4, 5].map((star) => (
-                                            <button 
-                                                key={star} type="button" onClick={() => setNewReviewRating(star)}
-                                                className="focus:outline-none transition-transform hover:scale-110"
-                                            >
-                                                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" 
-                                                  className={`w-8 h-8 ${newReviewRating >= star ? 'text-amber-400' : 'text-gray-300 hover:text-amber-200'}`}>
-                                                  <path fillRule="evenodd" d="M10.788 3.21c.448-1.077 1.976-1.077 2.424 0l2.082 5.006 5.404.434c1.164.093 1.636 1.545.749 2.305l-4.117 3.527 1.257 5.273c.271 1.136-.964 2.033-1.96 1.425L12 18.354 7.373 21.18c-.996.608-2.231-.29-1.96-1.425l1.257-5.273-4.117-3.527c-.887-.76-.415-2.212.749-2.305l5.404-.434 2.082-5.006z" clipRule="evenodd" />
-                                                </svg>
-                                            </button>
-                                        ))}
-                                    </div>
+                                <div className="flex gap-1">
+                                    {[1, 2, 3, 4, 5].map((star) => (
+                                        <button key={star} type="button" onClick={() => setNewReviewRating(star)} className="focus:outline-none transition-transform hover:scale-110">
+                                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className={`w-8 h-8 ${newReviewRating >= star ? 'text-amber-400' : 'text-gray-300'}`}><path fillRule="evenodd" d="M10.788 3.21c.448-1.077 1.976-1.077 2.424 0l2.082 5.006 5.404.434c1.164.093 1.636 1.545.749 2.305l-4.117 3.527 1.257 5.273c.271 1.136-.964 2.033-1.96 1.425L12 18.354 7.373 21.18c-.996.608-2.231-.29-1.96-1.425l1.257-5.273-4.117-3.527c-.887-.76-.415-2.212.749-2.305l5.404-.434 2.082-5.006z" clipRule="evenodd" /></svg>
+                                        </button>
+                                    ))}
                                 </div>
-                                <div>
-                                    <p className="text-sm font-medium text-slate-700 mb-2">Comentario (opcional)</p>
-                                    <textarea 
-                                        value={newReviewText} onChange={(e) => setNewReviewText(e.target.value)}
-                                        className="w-full p-3 bg-white border border-gray-200 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-transparent outline-none resize-none h-24 text-sm"
-                                        placeholder="¿Qué te pareció este producto?"
-                                    />
-                                </div>
-                                <button 
-                                    type="submit" disabled={isSubmitting}
-                                    className="w-full bg-emerald-500 text-white font-bold py-3 rounded-xl shadow-md hover:bg-emerald-600 transition-colors disabled:opacity-50"
-                                >
+                                <textarea value={newReviewText} onChange={(e) => setNewReviewText(e.target.value)}
+                                    className="w-full p-3 bg-white border border-gray-200 rounded-xl focus:ring-2 focus:ring-emerald-500 outline-none h-24 text-sm"
+                                    placeholder="¿Qué te pareció?" />
+                                <button type="submit" disabled={isSubmitting} className="w-full bg-emerald-500 text-white font-bold py-3 rounded-xl shadow-md hover:bg-emerald-600 disabled:opacity-50">
                                     {isSubmitting ? 'Enviando...' : 'Publicar reseña'}
                                 </button>
                             </form>
@@ -333,40 +306,25 @@ const ProductDetails: React.FC = () => {
           <section>
             <h2 className="text-2xl font-black text-slate-900 mb-8">También te podría gustar</h2>
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-              {related.map(item => (
-                <ProductCard key={item.id_producto} product={item} />
-              ))}
+              {related.map(item => <ProductCard key={item.id_producto} product={item} />)}
             </div>
           </section>
         )}
       </main>
-
       <Footer />
 
-      {/* ✨ MODAL DE ÉXITO FLOTANTE ✨ */}
       {showSuccessModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 backdrop-blur-sm p-4">
-          <div className="bg-white rounded-3xl p-8 max-w-sm w-full text-center shadow-2xl transform transition-all scale-100 opacity-100">
-            
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/40 backdrop-blur-sm p-4">
+          <div className="bg-white rounded-3xl p-8 max-w-sm w-full text-center shadow-2xl">
             <div className="w-20 h-20 bg-emerald-100 text-emerald-500 rounded-full flex items-center justify-center mx-auto mb-6">
-              <svg className="w-10 h-10" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
-              </svg>
+              <svg className="w-10 h-10" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}><path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" /></svg>
             </div>
-            
             <h3 className="text-2xl font-black text-slate-900 mb-2">¡Reseña Publicada!</h3>
-            <p className="text-gray-500 mb-8">Gracias por compartir tu opinión. Nos ayuda a mejorar ModaGlobal.</p>
-            
-            <button 
-              onClick={() => setShowSuccessModal(false)}
-              className="w-full bg-slate-900 text-white font-bold py-3 rounded-xl hover:bg-emerald-500 transition-colors shadow-lg active:scale-95"
-            >
-              Continuar
-            </button>
+            <p className="text-gray-500 mb-8">Gracias por mejorar ModaGlobal.</p>
+            <button onClick={() => setShowSuccessModal(false)} className="w-full bg-slate-900 text-white font-bold py-3 rounded-xl hover:bg-emerald-500 shadow-lg active:scale-95">Continuar</button>
           </div>
         </div>
       )}
-
     </div>
   );
 };

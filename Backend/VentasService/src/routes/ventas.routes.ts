@@ -5,15 +5,25 @@ import { getVentas, createVenta, actualizarEstado } from '../controllers/ventas.
 const router = Router();
 
 // ==========================================
-// 1. SEGURIDAD BASE (Aplica a todas las rutas)
+// 1. SEGURIDAD DE MICROSERVICIO
 // ==========================================
+// Esto asegura que nadie se salte el ApiGateway para pegarle directo a la IP de la base de datos
 router.use(verificarAccesoInterno);
 
-// Rutas base: http://localhost:3003/api/ventas
-router.get('/', getVentas);
-router.post('/', verificarRol(['Cajero', 'Administrador']), createVenta);
+// ==========================================
+// 2. DEFINICIÓN DE RUTAS
+// ==========================================
 
-// Ruta para actualizar estado: PATCH http://localhost:3003/api/ventas/VTA-XXXXX/estado
+// Obtener historial: Solo Staff puede ver todas las ventas
+router.get('/', verificarRol(['Cajero', 'Administrador', 'SuperAdministrador']), getVentas);
+
+// Crear venta: 
+// IMPORTANTE: Si es Venta en Línea, el Cliente necesita permiso. 
+// Si es Venta Local, el Cajero la crea. 
+router.post('/', verificarRol(['Cliente', 'Cajero', 'Administrador']), createVenta);
+
+// Actualizar estado de entrega (PATCH): 
+// Esta es la que hicimos hoy, solo el Staff de tienda puede marcar como "Entregado"
 router.patch('/:id_venta/estado', verificarRol(['Cajero', 'Administrador']), actualizarEstado);
 
 export default router;
