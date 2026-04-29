@@ -1,27 +1,27 @@
 import { ServiceBusClient, ServiceBusMessage } from "@azure/service-bus";
 import { logger } from "../utils/Logger";
+import { v4 as uuidv4 } from 'uuid';
 import dotenv from 'dotenv';
 import WebSocket from "ws"; // ✨ NUEVO IMPORT
 
 dotenv.config();
 
-// Inicializamos el cliente de Azure usando tu .env
 const connectionString = process.env.AZURE_SERVICEBUS_CONNECTION_STRING || '';
-const topicName = "tienda.productos";
+const topicName = "tienda.inventarios"; 
 
 let sbClient: ServiceBusClient;
 let sender: any;
 
 try {
     if (connectionString) {
-        // ✨ AQUÍ ESTÁ LA MAGIA: Forzamos WebSockets (Puerto 443)
+        // ✨ AQUÍ ESTÁ LA MAGIA: Forzamos WebSockets
         sbClient = new ServiceBusClient(connectionString, {
             webSocketOptions: {
                 webSocket: WebSocket
             }
         });
         sender = sbClient.createSender(topicName);
-        logger.info(`Conectado exitosamente a Azure Service Bus por WebSockets (Tópico: ${topicName})`);
+        logger.info(`Conectado a Azure Service Bus por WebSockets (Tópico: ${topicName})`);
     } else {
         logger.warn("No se encontró la cadena de conexión de Service Bus.");
     }
@@ -30,20 +30,14 @@ try {
 }
 
 export const publicarEvento = async (tipoEvento: string, datos: any) => {
-    if (!sender) {
-        logger.error("No se puede publicar el evento. El bus no está conectado.");
-        return;
-    }
+    if (!sender) return;
 
     try {
-        // Estructuramos el mensaje estándar para toda la empresa
+        const idUnico = `msg-${uuidv4()}`;
         const mensaje: ServiceBusMessage = {
+            messageId: idUnico,
             body: {
-                metadata: {
-                    evento: tipoEvento,
-                    timestamp: new Date().toISOString(),
-                    origen: "ProductService"
-                },
+                metadata: { evento: tipoEvento, timestamp: new Date().toISOString(), origen: "InventarioService" },
                 payload: datos
             },
             contentType: "application/json",
@@ -51,7 +45,7 @@ export const publicarEvento = async (tipoEvento: string, datos: any) => {
         };
 
         await sender.sendMessages(mensaje);
-        logger.info(`Evento emitido al Bus 📢: [${tipoEvento}] para ID: ${datos.id_producto || 'N/A'}`);
+        logger.info(`📢 Evento emitido: [${tipoEvento}] ID: ${idUnico} | Tienda: ${datos.id_tienda}`);
     } catch (error) {
         logger.error(`Fallo al emitir evento ${tipoEvento}`, error);
     }

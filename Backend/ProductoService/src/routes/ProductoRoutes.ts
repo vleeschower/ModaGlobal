@@ -13,7 +13,8 @@ import {
     vincularProveedor,
     crearProducto, 
     actualizarProducto,
-    eliminarProducto
+    eliminarProducto,
+    obtenerInventarioRed
 } from '../controllers/ProductoController';
 import { verificarApiKey, verificarAccesoInterno, verificarRol } from '../middlewares/Security';
 import { upload } from '../config/Cloudinary';
@@ -50,6 +51,7 @@ router.post('/resenas', crearResena);
 // Vistas del Dashboard
 router.get('/admin/lista', verificarRol(['Administrador', 'SuperAdministrador']), obtenerProductosAdmin);
 router.get('/promociones/admin', verificarRol(['Administrador', 'SuperAdministrador']), obtenerPromocionesAdmin);
+router.get('/inventario/red', verificarRol(['Administrador', 'SuperAdministrador']), obtenerInventarioRed);
 
 // Operaciones de Sucursal
 router.post('/promociones/admin/guardar', verificarRol(['Administrador', 'SuperAdministrador']), guardarPromocion);

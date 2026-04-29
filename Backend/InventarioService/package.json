@@ -19,6 +19,7 @@
     "mssql": "^12.3.0",
     "uuid": "^13.0.0",
     "winston": "^3.19.0",
+    "ws": "^8.20.0",
     "xss": "^1.0.15"
   },
   "devDependencies": {
@@ -27,6 +28,7 @@
     "@types/mssql": "^9.1.11",
     "@types/node": "^25.5.2",
     "@types/uuid": "^11.0.0",
+    "@types/ws": "^8.18.1",
     "ts-node": "^10.9.2",
     "typescript": "^6.0.2"
   }

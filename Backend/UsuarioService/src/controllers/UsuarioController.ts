@@ -7,7 +7,13 @@ import { logger } from '../utils/logger';
 import sql from 'mssql';
 import crypto from 'crypto';
 
-const JWT_SECRET = process.env.JWT_SECRET || crypto.randomBytes(64).toString('hex');
+const JWT_SECRET = process.env.JWT_SECRET;
+
+if (!JWT_SECRET) {
+    console.error("FATAL: JWT_SECRET no está configurado en las variables de entorno.");
+    process.exit(1); 
+}
+
 const SALT_ROUNDS = 12;
 
 // Registrar usuario (solo clientes)
@@ -309,6 +315,7 @@ export const login = async (req: Request, res: Response): Promise<void> => {
         const token = jwt.sign(
             { 
                 id: user.id_usuario, 
+                nombre: user.nombre,
                 email: user.email,
                 rol: user.rol_nombre,
                 id_tienda: user.id_tienda,

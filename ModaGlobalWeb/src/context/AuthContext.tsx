@@ -1,5 +1,5 @@
 // context/AuthContext.tsx
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext, useState } from 'react';
 import { userService } from '../services/UserService';
 import type { User } from '../services/UserService';
 
@@ -18,15 +18,13 @@ interface AuthContextType {
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [user, setUser] = useState<User | null>(null);
-
-  useEffect(() => {
-    // Cargar usuario desde localStorage al iniciar
-    const currentUser = userService.getCurrentUser();
-    if (currentUser) {
-      setUser(currentUser);
-    }
-  }, []);
+  
+  // ✨ LA MAGIA ESTÁ AQUÍ: Inicialización Síncrona
+  // Al pasarle una función al useState, React lee el localStorage en el 
+  // milisegundo exacto en que se monta la app, ANTES de revisar las rutas.
+  const [user, setUser] = useState<User | null>(() => {
+    return userService.getCurrentUser();
+  });
 
   const isAdmin = user?.rol === 'Administrador';
   const isSuperAdmin = user?.rol === 'SuperAdministrador';
@@ -42,7 +40,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const logout = () => {
     setUser(null);
-    userService.logout();
+    userService.logout(); // Tu servicio ya limpia el localStorage y redirige
   };
 
   const updateUser = (userData: User) => {

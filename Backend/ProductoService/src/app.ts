@@ -1,13 +1,13 @@
-// src/app.ts
+// app.ts
 import express from 'express';
 import cors from 'cors';
-import productRoutes from './routes/ProductoRoutes';
+import routes from './routes/ProductoRoutes';
 
 const app = express();
-
 app.use(cors());
-app.use(express.json()); // Necesario para leer el req.body
+app.use(express.json({ limit: '2mb' })); // Protección DoS aquí
+app.use(express.urlencoded({ extended: true, limit: '2mb' }));
 
-app.use('/', productRoutes);
+app.use('/', routes);
 
 export default app;

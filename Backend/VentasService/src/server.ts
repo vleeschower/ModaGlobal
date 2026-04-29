@@ -6,7 +6,7 @@ import dotenv from 'dotenv';
 
 dotenv.config();
 
-const PORT = process.env.PORT || 3003; 
+const PORT = process.env.PORT || 3004; 
 
 app.listen(PORT, async () => {
     logger.info(`VentasService desplegado en el puerto ${PORT}`);

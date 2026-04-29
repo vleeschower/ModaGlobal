@@ -3,14 +3,16 @@ import cors from 'cors';
 import { createProxyMiddleware, Options } from 'http-proxy-middleware';
 import rateLimit from 'express-rate-limit';
 import dotenv from 'dotenv';
-import { ClientRequest } from 'http'; 
-
+import { ClientRequest } from 'http';
 import { validarAccesoGoblal, AuthRequest } from './middlewares/AuthMiddleware';
 
 dotenv.config();
 
 const app: Application = express();
 const PORT: number | string = process.env.PORT || 3000;
+
+// 👇 CAMBIO 1: Agrega esto para que el limitador de peticiones lea la IP real del usuario y no la de tu balanceador de GCP/Azure.
+app.set('trust proxy', 1); 
 
 app.use(cors());
 
@@ -21,8 +23,16 @@ const configurarHeadersSeguridad = (proxyReq: ClientRequest, req: AuthRequest) =
     const internalKey = process.env.INTERNAL_API_KEY || 'clave-secreta-interna-modaglobal';
     proxyReq.setHeader('x-api-key', internalKey);
 
+    // 👇 CAMBIO 2: Purgar headers maliciosos antes de inyectar los reales.
+    // Esto evita que un invitado falsifique ser administrador.
+    proxyReq.removeHeader('x-user-id');
+    proxyReq.removeHeader('x-user-name');
+    proxyReq.removeHeader('x-user-rol');
+    proxyReq.removeHeader('x-user-tienda-id');
+
     if (req.user) {
         proxyReq.setHeader('x-user-id', req.user.id);
+        proxyReq.setHeader('x-user-name', encodeURIComponent(req.user.nombre));
         proxyReq.setHeader('x-user-rol', req.user.rol);
         if (req.user.tienda_id) {
             proxyReq.setHeader('x-user-tienda-id', req.user.tienda_id);
@@ -60,7 +70,7 @@ const productoProxyOptions: Options = {
 };
 
 const usuarioProxyOptions: Options = {
-    target: 'http://localhost:3022',
+    target: 'http://localhost:3003',
     changeOrigin: true,
     pathRewrite: { '^/api/usuarios': '' },
     on: { proxyReq: (proxyReq, req, _res) => configurarHeadersSeguridad(proxyReq as ClientRequest, req as AuthRequest) }
@@ -90,8 +100,9 @@ app.delete('/api/productos/:id', limitadorSeguridad);
 
 // C. ENRUTADOR MAESTRO OMNICANAL
 app.use('/api/usuarios', validarAccesoGoblal, createProxyMiddleware(usuarioProxyOptions));
-app.use('/api/venta', validarAccesoGoblal, createProxyMiddleware(ventaProxyOptions));
+app.use('/api/ventas', validarAccesoGoblal, createProxyMiddleware(ventaProxyOptions));
 app.use('/api/productos', validarAccesoGoblal, createProxyMiddleware(productoProxyOptions));
+app.use('/api/inventario', validarAccesoGoblal, createProxyMiddleware(inventarioProxyOptions)); // ← AGREGA ESTA
 
 // ==========================================================
 // 4. INICIO DEL SERVIDOR

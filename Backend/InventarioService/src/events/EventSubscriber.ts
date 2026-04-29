@@ -1,8 +1,9 @@
 import { ServiceBusClient } from "@azure/service-bus";
 import { logger } from "../utils/Logger";
 import { getConnection } from "../config/Db";
-import { v4 as uuidv4 } from 'uuid'; // Importante: te faltaba este import
+import { v4 as uuidv4 } from 'uuid';
 import dotenv from 'dotenv';
+import WebSocket from "ws"; // ✨ NUEVO IMPORT
 
 dotenv.config();
 
@@ -16,10 +17,15 @@ export const iniciarEscuchaEventos = async () => {
         return;
     }
 
-    const sbClient = new ServiceBusClient(connectionString);
+    // ✨ AQUÍ ESTÁ LA MAGIA: Forzamos WebSockets
+    const sbClient = new ServiceBusClient(connectionString, {
+        webSocketOptions: {
+            webSocket: WebSocket
+        }
+    });
     const receiver = sbClient.createReceiver(topicName, subscriptionName);
 
-    logger.info(`🎧 Inventario escuchando eventos en Tópico: ${topicName} | Sub: ${subscriptionName}`);
+    logger.info(`🎧 Inventario escuchando eventos por WebSockets en Tópico: ${topicName} | Sub: ${subscriptionName}`);
 
     const procesarMensaje = async (mensajeRecibido: any) => {
         try {
@@ -90,8 +96,19 @@ export const iniciarEscuchaEventos = async () => {
             await receiver.completeMessage(mensajeRecibido);
 
         } catch (error) {
-            logger.error(`❌ Error procesando evento de inventario:`, error);
-            // Si falla, no hacemos "complete", así el Bus lo reintenta después
+            logger.error(`❌ Error procesando evento:`, error);
+            
+            // 👇 CAMBIO: Enviar el mensaje roto a la Dead Letter Queue (Cola de Mensajes Muertos)
+            // Esto evita que el mensaje regrese a la cola principal y sature tu base de datos cobrándote de más.
+            try {
+                await receiver.deadLetterMessage(mensajeRecibido, {
+                    deadLetterReason: "ErrorProcesamientoBD",
+                    deadLetterErrorDescription: error instanceof Error ? error.message : "Fallo desconocido al procesar transacción"
+                });
+                logger.info("Mensaje movido a la cola de mensajes muertos (DLQ).");
+            } catch (dlqError) {
+                logger.error("Fallo crítico: No se pudo mover el mensaje a DLQ", dlqError);
+            }
         }
     };
 

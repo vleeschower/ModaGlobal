@@ -19,6 +19,7 @@ export interface RatingProducto {
 export interface ResenaReciente {
   id_resena: string;
   id_usuario: string;
+  nombre_usuario_snapshot: string;
   calificacion: number;
   comentario: string;
   created_at: string;
@@ -34,9 +35,16 @@ export interface Producto {
   imagen_url?: string;
   nombre_categoria?: string;
   
-  // -- NUEVOS CAMPOS DEL BACKEND --
+  // -- CAMPOS DEL BACKEND --
   galeria?: ImagenProducto[];
   especificaciones?: EspecificacionProducto[];
   rating?: RatingProducto;
   reseñas_recientes?: ResenaReciente[];
+
+  // ✨ NUEVOS CAMPOS OMNICANAL Y PROMOCIONES --
+  stock_local?: number;
+  stock_matriz?: number; // Para ver cuánto tiene el CEDIS
+  descuento_local?: number;
+  promo_fin?: string;
+  razon_agotado?: string; // "vendido en sucursal" o "vendido por app movil"
 }

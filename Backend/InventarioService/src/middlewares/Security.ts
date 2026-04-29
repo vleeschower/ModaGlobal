@@ -1,6 +1,17 @@
 import { NextFunction } from 'express';
 import { logger } from '../utils/Logger';
 
+// 1. NUEVO MIDDLEWARE: Solo valida que venga del API Gateway (Para rutas públicas)
+export const verificarApiKey = (req: any, res: any, next: NextFunction): void => {
+    const apiKey = req.headers['x-api-key'];
+    
+    if (!apiKey || apiKey !== process.env.INTERNAL_API_KEY) {
+        logger.error(`BLOQUEO: Intento de bypass de Gateway desde IP: ${req.ip}`);
+        return res.status(403).json({ error: 'Acceso denegado. Use el API Gateway.' });
+    }
+    next();
+};
+
 export const verificarAccesoInterno = (req: any, res: any, next: NextFunction): void => {
     const apiKey = req.headers['x-api-key'];
     const userId = req.headers['x-user-id'];
@@ -20,7 +31,7 @@ export const verificarAccesoInterno = (req: any, res: any, next: NextFunction): 
     }
 
     // 3. LA NUEVA REGLA DE NEGOCIO: Admins y Cajeros no pueden existir sin sucursal
-    if ((userRol === 'Admin' || userRol === 'Cajero') && !tiendaId) {
+    if ((userRol === 'Administrador' || userRol === 'Cajero') && !tiendaId) {
         logger.error(`BLOQUEO: ${userRol} (ID: ${userId}) intentó operar sin sucursal asignada.`);
         return res.status(403).json({ 
             error: 'Operación denegada. Su cuenta no tiene una sucursal física asignada en el sistema.' 

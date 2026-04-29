@@ -15,6 +15,7 @@ export const verificarApiKey = (req: any, res: any, next: NextFunction): void =>
 // 2. MIDDLEWARE MODIFICADO: Valida la sesión del usuario (Para rutas protegidas)
 export const verificarAccesoInterno = (req: any, res: any, next: NextFunction): void => {
     const userId = req.headers['x-user-id'];
+    const userNombre = req.headers['x-user-name'];
     const userRol = req.headers['x-user-rol'];
     const tiendaId = req.headers['x-user-tienda-id'];
 
@@ -31,6 +32,7 @@ export const verificarAccesoInterno = (req: any, res: any, next: NextFunction): 
     }
 
     req.usuarioTransaccion = userId;
+    req.usuarioNombre = userNombre;
     req.usuarioRol = userRol;
     req.usuarioTiendaId = tiendaId || null; 
 

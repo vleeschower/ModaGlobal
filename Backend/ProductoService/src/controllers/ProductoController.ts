@@ -5,155 +5,244 @@ import { v4 as uuidv4 } from 'uuid';
 import xss from 'xss'; // Librería Anti-XSS
 import { publicarEvento } from '../events/EventPublisher';
 
-// GET: Público (Clientes, Cajeros, Admins) con PAGINACIÓN
+// GET: Público (Clientes y Navegantes) con LÓGICA DE TIENDA CERCANA (OMNICANAL)
 export const obtenerProductos = async (req: Request, res: Response): Promise<void> => {
     try {
         const page = parseInt(req.query.page as string) || 1;
         const limit = parseInt(req.query.limit as string) || 20;
         
+        // ✨ LÓGICA OMNICANAL: Recibimos la tienda más cercana calculada por el Gateway/Usuarios
+        // Si el usuario no ha iniciado sesión o no tiene dirección, caemos en un fallback (ej. CEDIS/Nacional)
+        const tiendaCercana = req.headers['x-tienda-cercana'] as string || req.query.tienda as string || 'tnd-matriz';
+
         const safeLimit = limit > 100 ? 100 : limit; 
         const offset = (page - 1) * safeLimit;
 
         const pool = await getConnection();
         
-        // 2. Consulta corregida: Una sola declaración y un solo flujo
         const result = await pool.request()
             .input('offset', offset)
             .input('limit', safeLimit)
+            .input('tienda', tiendaCercana)
             .query(`
-                -- 1. Declaramos y obtenemos el total una sola vez
                 DECLARE @TotalRecords INT;
                 SELECT @TotalRecords = COUNT(*) FROM dbo.productos WHERE deleted_at IS NULL;
 
-                -- 2. Obtenemos los productos con su categoría en un solo SELECT
+                -- ✨ Obtenemos productos + Stock local + Promociones locales válidas hoy
                 SELECT 
                     p.id_producto, 
                     p.nombre, 
                     p.descripcion, 
                     p.precio_base, 
-                    p.imagen_url, 
+                    
+                    -- ✨ CORRECCIÓN: Traer siempre la imagen principal dinámica de la galería
+                    ISNULL(
+                        (SELECT TOP 1 imagen_url FROM dbo.imagenes_producto 
+                         WHERE id_producto = p.id_producto AND es_principal = 1 AND deleted_at IS NULL),
+                        p.imagen_url -- Fallback a la estática por si acaso
+                    ) AS imagen_url,
+                    
                     p.id_categoria,
-                    c.nombre AS nombre_categoria
+                    c.nombre AS nombre_categoria,
+                    ISNULL(ir.stock_disponible, 0) as stock_local,
+                    pr.descuento as descuento_local,
+                    pr.fecha_fin as promo_fin
                 FROM dbo.productos p
                 LEFT JOIN dbo.categorias c ON p.id_categoria = c.id_categoria
+                -- 📍 Cruce con la Réplica de Inventarios para ESTA tienda específica
+                LEFT JOIN dbo.inventarios_replica ir ON p.id_producto = ir.id_producto AND ir.id_tienda = @tienda
+                -- 💰 Cruce con Promociones para ESTA tienda específica (solo si están vigentes)
+                LEFT JOIN dbo.promociones pr ON p.id_producto = pr.id_producto 
+                     AND pr.id_tienda = @tienda 
+                     AND pr.deleted_at IS NULL 
+                     AND SYSUTCDATETIME() BETWEEN pr.fecha_inicio AND pr.fecha_fin
                 WHERE p.deleted_at IS NULL
                 ORDER BY p.created_at DESC
                 OFFSET @offset ROWS FETCH NEXT @limit ROWS ONLY;
 
-                -- 3. Devolvemos el total como segundo conjunto de resultados
                 SELECT @TotalRecords as total_registros;
             `);
         
-        // 3. Formateamos la respuesta
         const recordsets = result.recordsets as unknown as any[][]; 
-
-        // 2. Ahora ya puedes acceder por índice sin errores
         const productos = recordsets[0] || [];
         const totalRegistrosRow = recordsets[1] ? recordsets[1][0] : null;
         const totalRegistros = totalRegistrosRow ? totalRegistrosRow.total_registros : 0;
 
-        const totalPaginas = Math.ceil(totalRegistros / safeLimit);
-
         res.status(200).json({ 
             success: true, 
+            tienda_referencia: tiendaCercana, // Informamos al front qué tienda estamos usando
             meta: {
                 pagina_actual: page,
                 productos_por_pagina: safeLimit,
                 total_productos: totalRegistros,
-                total_paginas: totalPaginas
+                total_paginas: Math.ceil(totalRegistros / safeLimit)
             },
             data: productos 
         });
 
     } catch (error) {
-        logger.error('Error obteniendo catálogo paginado', error);
+        logger.error('Error obteniendo catálogo público omnicanal', error);
         res.status(500).json({ error: 'Error interno del servidor' });
     }
 };
 
 // POST: Protegido (Solo Admins y SuperAdmins)
 export const crearProducto = async (req: any, res: Response): Promise<void> => {
+    const pool = await getConnection();
+    const transaction = pool.transaction();
+
     try {
-        const { nombre, descripcion, precio_base, sku, id_categoria, stock_inicial } = req.body;
-        // ESTRATEGIA DE SEGURIDAD 4: Verificar si la subida fue exitosa
-        if (!req.file) {
+        const { nombre, descripcion, precio_base, sku, id_categoria, stock_inicial, mainImageIndex } = req.body;
+        const idUsuarioReal = req.headers['x-user-id'] || 'SISTEMA'; 
+        
+        // ✨ ESTRATEGIA OMNICANAL: Fallback absoluto a la Sede Central si el admin no tiene tienda
+        const tiendaDestino = 'tnd-matriz';
+
+        const imagenesSubidas = req.files as Express.Multer.File[] || [];
+        if (imagenesSubidas.length === 0) {
             res.status(400).json({ error: 'La imagen del producto es obligatoria.' });
             return;
         }
-        const imagenUrlSegura = req.file.path; // URL de Cloudinary (https)
-        const idUsuarioReal = req.headers['x-user-id'] || 'SISTEMA'; 
+
+        let especificaciones: { clave: string, valor: string }[] = [];
+        if (req.body.especificaciones) {
+            try { especificaciones = JSON.parse(req.body.especificaciones); } catch(e) {}
+        }
+
         const precioNum = parseFloat(precio_base);
         const stockNum = parseInt(stock_inicial) || 0;
+        const indicePrincipal = parseInt(mainImageIndex) || 0;
 
-        // 1. Sanitización Anti-XSS (Limpiamos textos que el usuario pueda ver)
         const nombreLimpio = xss(nombre);
         const descLimpia = xss(descripcion);
 
-        const pool = await getConnection();
         const idProducto = `prod-${uuidv4().substring(0,8)}`;
         const idAuditoria = `aud-${uuidv4().substring(0,8)}`;
-        const valoresNuevos = JSON.stringify({ nombre: nombreLimpio, precio_base, sku });
+        const imagenUrlSegura = imagenesSubidas[indicePrincipal]?.path || imagenesSubidas[0].path; 
 
-        // 2. Consulta Parametrizada (Anti-SQL Injection)
-        await pool.request()
+        await transaction.begin();
+
+        // 1. INSERTAR PRODUCTO BÁSICO
+        const reqProd = transaction.request();
+        await reqProd
             .input('id_producto', idProducto)
             .input('nombre', nombreLimpio)
             .input('descripcion', descLimpia)
-            .input('id_categoria', id_categoria)
+            .input('id_categoria', id_categoria || null)
             .input('precio_base', precioNum)
             .input('sku', sku)
-            .input('imagen_url', imagenUrlSegura) // Guardamos la URL segura
+            .input('imagen_url', imagenUrlSegura) 
             .input('id_usuario', idUsuarioReal)
-            .input('id_auditoria', idAuditoria)
-            .input('valores_nuevos', valoresNuevos)
-            .input('ip_origen', req.ip || '127.0.0.1')
             .query(`
-                BEGIN TRANSACTION;
-                
                 INSERT INTO dbo.productos (id_producto, nombre, descripcion, id_categoria, precio_base, sku, imagen_url, created_by)
                 VALUES (@id_producto, @nombre, @descripcion, @id_categoria, @precio_base, @sku, @imagen_url, @id_usuario);
-
-                INSERT INTO dbo.auditoria_productos (id_auditoria, id_usuario, tabla_afectada, id_registro_afectado, accion, valores_nuevos, ip_origen)
-                VALUES (@id_auditoria, @id_usuario, 'productos', @id_producto, 'INSERT', @valores_nuevos, @ip_origen);
-                
-                COMMIT TRANSACTION;
             `);
 
-        logger.info(`Producto ${idProducto} creado en Base de Datos.`);
+        // 2. INSERTAR ESPECIFICACIONES (Antes faltaba)
+        for (let i = 0; i < especificaciones.length; i++) {
+            const spec = especificaciones[i];
+            if (spec.clave && spec.valor) {
+                const reqSpec = transaction.request();
+                await reqSpec
+                    .input('id_espec', `spc-${uuidv4().substring(0,8)}`)
+                    .input('id_prod', idProducto)
+                    .input('clave', xss(spec.clave))
+                    .input('valor', xss(spec.valor))
+                    .input('orden', i + 1)
+                    .input('id_user', idUsuarioReal)
+                    .query(`
+                        INSERT INTO dbo.especificaciones_producto (id_especificacion, id_producto, clave, valor, orden, created_by)
+                        VALUES (@id_espec, @id_prod, @clave, @valor, @orden, @id_user);
+                    `);
+            }
+        }
+
+        // 3. INSERTAR GALERÍA CON ORDEN INTELIGENTE Y BIT PRINCIPAL
+        for (let i = 0; i < imagenesSubidas.length; i++) {
+            const img = imagenesSubidas[i];
+            const esPrincipalBit = (i === indicePrincipal) ? 1 : 0; // BIT 1/0
+            const ordenImagen = (i === indicePrincipal) ? 1 : i + 2; // El principal siempre es el 1
+
+            const reqImg = transaction.request();
+            await reqImg
+                .input('id_img', `img-${uuidv4().substring(0,8)}`)
+                .input('id_prod', idProducto)
+                .input('img_url', img.path)
+                .input('es_princ', esPrincipalBit)
+                .input('orden', ordenImagen)
+                .input('id_user', idUsuarioReal)
+                .query(`
+                    INSERT INTO dbo.imagenes_producto (id_imagen, id_producto, imagen_url, es_principal, orden, created_by)
+                    VALUES (@id_img, @id_prod, @img_url, @es_princ, @orden, @id_user);
+                `);
+        }
+
+        // 4. AUDITORÍA
+        const reqAud = transaction.request();
+        await reqAud
+            .input('id_auditoria', idAuditoria)
+            .input('id_usuario', idUsuarioReal)
+            .input('id_producto', idProducto)
+            .input('ip_origen', req.ip || '127.0.0.1')
+            .input('valores_nuevos', JSON.stringify({ nombre: nombreLimpio, precio_base, sku }))
+            .query(`
+                INSERT INTO dbo.auditoria_productos (id_auditoria, id_usuario, tabla_afectada, id_registro_afectado, accion, valores_nuevos, ip_origen)
+                VALUES (@id_auditoria, @id_usuario, 'productos', @id_producto, 'INSERT_COMPLETO', @valores_nuevos, @ip_origen);
+            `);
+
+        await transaction.commit();
+        logger.info(`Producto ${idProducto} creado con su galería y especificaciones.`);
         
-        const tiendaDestino = req.usuarioTiendaId || req.body.id_tienda;
         // ==========================================
-        // 3. ¡LA MAGIA DE LOS EVENTOS OCURRE AQUÍ!
+        // EMITIR EVENTO (Ahora con la Tienda garantizada)
         // ==========================================
-        // Le avisamos a toda la empresa (incluyendo Inventarios) que hay un nuevo producto
         await publicarEvento('PRODUCTO_CREADO', {
             id_producto: idProducto,
             nombre: nombreLimpio,
-            stock_inicial: stockNum || 0, // Inventarios usará esto
+            stock_inicial: stockNum || 0,
             precio_base: precio_base,
-            id_tienda: tiendaDestino // <-- NUEVO: Propagamos la tienda para que Inventarios sepa dónde crear el stock
+            id_tienda: tiendaDestino 
         });
 
-        res.status(201).json({ success: true, message: 'Producto creado, auditado y propagado en la red.' });
+        res.status(201).json({ success: true, message: 'Producto creado y propagado en la red.' });
 
     } catch (error) {
+        await transaction.rollback();
         logger.error('Error creando producto', error);
         res.status(500).json({ error: 'Fallo al crear el producto' });
-    }      
-}
+    }       
+};
 
-// 1. OBTENER DETALLE COMPLETO (Producto + Imágenes + Specs + Rating)
+// 1. OBTENER DETALLE COMPLETO (Producto + Imágenes + Specs + Rating + LÓGICA OMNICANAL)
+// 1. OBTENER DETALLE COMPLETO (Producto + Imágenes + Specs + Rating + LÓGICA OMNICANAL)
 export const obtenerProductoPorId = async (req: Request, res: Response): Promise<void> => {
     try {
         const { id } = req.params;
+        // ✨ OMNICANALIDAD: Saber a qué tienda está apuntando el cliente
+        const tiendaCercana = req.headers['x-tienda-cercana'] as string || req.query.tienda as string || 'tnd-matriz';
+
         const pool = await getConnection();
         
         const result = await pool.request()
             .input('id', id)
+            .input('tienda', tiendaCercana)
             .query(`
                 SELECT 
-                    p.id_producto, p.nombre, p.descripcion, p.precio_base, p.sku, p.imagen_url as imagen_principal,
+                    p.id_producto, p.nombre, p.descripcion, p.precio_base, p.sku, 
+                    
+                    -- ✨ CORRECCIÓN: Imagen Principal Dinámica
+                    ISNULL(
+                        (SELECT TOP 1 imagen_url FROM dbo.imagenes_producto 
+                         WHERE id_producto = p.id_producto AND es_principal = 1 AND deleted_at IS NULL),
+                        p.imagen_url
+                    ) AS imagen_principal,
+                    
                     c.nombre AS nombre_categoria,
+                    
+                    -- ✨ STOCK Y PROMOCIONES DE LA TIENDA CERCANA
+                    ISNULL(ir.stock_disponible, 0) as stock_local,
+                    pr.descuento as descuento_local,
+                    pr.fecha_fin as promo_fin,
                     
                     -- Subconsulta: Galería de Imágenes
                     (SELECT imagen_url, es_principal, orden 
@@ -175,15 +264,24 @@ export const obtenerProductoPorId = async (req: Request, res: Response): Promise
                      WHERE id_producto = p.id_producto AND deleted_at IS NULL
                      FOR JSON PATH, WITHOUT_ARRAY_WRAPPER) AS rating,
                      
-                    -- Subconsulta: Últimas 5 reseñas (Usando TOP 5, sin FETCH)
-                    (SELECT TOP 5 id_resena, id_usuario, calificacion, comentario, created_at 
+                    -- Subconsulta: Últimas 5 reseñas
+                    (SELECT TOP 5 id_resena, id_usuario, nombre_usuario_snapshot, calificacion, comentario, created_at 
                      FROM dbo.resenas_producto 
                      WHERE id_producto = p.id_producto AND deleted_at IS NULL
                      ORDER BY created_at DESC 
-                     FOR JSON PATH) AS reseñas_recientes
+                     FOR JSON PATH) AS reseñas_recientes, -- ✨ ¡AQUÍ ESTÁ LA COMA QUE FALTABA!
+
+                     -- ✨ CORRECCIÓN ARQUITECTÓNICA: 
+                     -- Como la tabla movimientos_inventario vive en otro microservicio,
+                     -- enviamos NULL y dejamos que el Frontend use su mensaje por defecto.
+                     NULL AS razon_agotado
 
                 FROM dbo.productos p
                 LEFT JOIN dbo.categorias c ON p.id_categoria = c.id_categoria
+                -- 📍 Cruces Omnicanal
+                LEFT JOIN dbo.inventarios_replica ir ON p.id_producto = ir.id_producto AND ir.id_tienda = @tienda
+                LEFT JOIN dbo.promociones pr ON p.id_producto = pr.id_producto AND pr.id_tienda = @tienda AND pr.deleted_at IS NULL AND SYSUTCDATETIME() BETWEEN pr.fecha_inicio AND pr.fecha_fin
+                
                 WHERE p.id_producto = @id AND p.deleted_at IS NULL
             `);
 
@@ -192,7 +290,6 @@ export const obtenerProductoPorId = async (req: Request, res: Response): Promise
             return;
         }
 
-        // Parseo de los campos JSON que SQL Server devuelve como string
         const p = result.recordset[0];
         const dataFinal = {
             ...p,
@@ -202,13 +299,12 @@ export const obtenerProductoPorId = async (req: Request, res: Response): Promise
             reseñas_recientes: JSON.parse(p.reseñas_recientes || '[]')
         };
 
-        res.status(200).json({ success: true, data: dataFinal });
+        res.status(200).json({ success: true, tienda_referencia: tiendaCercana, data: dataFinal });
     } catch (error) {
         logger.error('Error en obtenerProductoPorId:', error);
         res.status(500).json({ error: 'Error interno al obtener detalles' });
     }
 };
-
 
 // ==========================================
 // MÓDULO: ACTUALIZAR PRODUCTO (PUT)
@@ -221,33 +317,26 @@ export const actualizarProducto = async (req: any, res: Response): Promise<void>
     const transaction = pool.transaction();
 
     try {
-        const { nombre, descripcion, precio_base, sku, id_categoria, mainImageId, imagesToDelete: rawImagesToDelete } = req.body;
+        const { nombre, descripcion, precio_base, sku, id_categoria, mainImageId, mainImageIndex, imagesToDelete: rawImagesToDelete } = req.body;
         
-        // 1. Parsear Especificaciones
         let especificaciones: { clave: string, valor: string }[] = [];
         if (req.body.especificaciones) {
             try { especificaciones = JSON.parse(req.body.especificaciones); } catch(e) {}
         }
 
-        // 2. Parsear Imágenes a borrar
         let imagesToDelete: string[] = [];
         if (rawImagesToDelete) {
             try { imagesToDelete = JSON.parse(rawImagesToDelete); } catch(e) {}
         }
 
-        // 3. Imágenes Nuevas
         const imagenesNuevas = req.files as Express.Multer.File[] || [];
-        const traeNuevasImagenes = imagenesNuevas.length > 0;
-
-        // Sanitización
         const nombreLimpio = xss(nombre);
         const descLimpia = xss(descripcion);
         const precioNum = parseFloat(precio_base) || 0;
-        const idAuditoria = `aud-${uuidv4().substring(0,8)}`;
 
         await transaction.begin();
 
-        // --- A. Actualizar Producto Básico (Sin tocar imagen_url todavía) ---
+        // 1. ACTUALIZAR PRODUCTO BÁSICO
         const reqProducto = transaction.request();
         await reqProducto
             .input('id_producto', id)
@@ -264,16 +353,12 @@ export const actualizarProducto = async (req: any, res: Response): Promise<void>
                 WHERE id_producto = @id_producto AND deleted_at IS NULL;
             `);
 
-        // --- B. Actualizar Especificaciones ---
+        // 2. ACTUALIZAR ESPECIFICACIONES
         const reqBorrarSpecs = transaction.request();
-        await reqBorrarSpecs
-            .input('id_prod', id)
-            .input('id_user', idUsuario)
-            .query(`
-                UPDATE dbo.especificaciones_producto 
-                SET deleted_at = SYSUTCDATETIME(), deleted_by = @id_user 
-                WHERE id_producto = @id_prod AND deleted_at IS NULL;
-            `);
+        await reqBorrarSpecs.input('id_prod', id).input('id_user', idUsuario).query(`
+            UPDATE dbo.especificaciones_producto SET deleted_at = SYSUTCDATETIME(), deleted_by = @id_user 
+            WHERE id_producto = @id_prod AND deleted_at IS NULL;
+        `);
 
         for (let i = 0; i < especificaciones.length; i++) {
             const spec = especificaciones[i];
@@ -293,9 +378,7 @@ export const actualizarProducto = async (req: any, res: Response): Promise<void>
             }
         }
 
-        // --- C. GESTIÓN INTELIGENTE DE GALERÍA ---
-        
-        // C1. Borrar las imágenes que el usuario quitó
+        // 3. GALERÍA - BORRAR SOLICITADAS
         if (imagesToDelete.length > 0) {
             const placeholders = imagesToDelete.map((_, i) => `@delImg${i}`).join(',');
             const reqDel = transaction.request();
@@ -303,23 +386,30 @@ export const actualizarProducto = async (req: any, res: Response): Promise<void>
             imagesToDelete.forEach((id_img, i) => reqDel.input(`delImg${i}`, id_img));
             
             await reqDel.query(`
-                UPDATE dbo.imagenes_producto 
-                SET deleted_at = SYSUTCDATETIME(), deleted_by = @id_user 
+                UPDATE dbo.imagenes_producto SET deleted_at = SYSUTCDATETIME(), deleted_by = @id_user 
                 WHERE id_imagen IN (${placeholders}) AND deleted_at IS NULL;
             `);
         }
 
-        // C2. Insertar las imágenes nuevas
-        let firstNewImageId = null;
-        let firstNewImageUrl = null;
+        // 4. GALERÍA - INTELIGENCIA DE ORDEN PARA LAS NUEVAS
+        const reqMaxOrden = transaction.request();
+        reqMaxOrden.input('id_prod', id);
+        const resultOrden = await reqMaxOrden.query(`
+            SELECT ISNULL(MAX(orden), 0) as max_orden 
+            FROM dbo.imagenes_producto 
+            WHERE id_producto = @id_prod AND deleted_at IS NULL;
+        `);
+        let nextOrden = resultOrden.recordset[0].max_orden + 1;
+
+        let idPrincipalNuevo = null;
+        let urlPrincipalNuevo = null;
 
         for (let i = 0; i < imagenesNuevas.length; i++) {
             const img = imagenesNuevas[i];
             const newImgId = `img-${uuidv4().substring(0,8)}`;
-            
-            if (i === 0) {
-                firstNewImageId = newImgId;
-                firstNewImageUrl = img.path;
+            if (parseInt(mainImageIndex) === i) { 
+                idPrincipalNuevo = newImgId; 
+                urlPrincipalNuevo = img.path; 
             }
 
             const reqImg = transaction.request();
@@ -327,8 +417,8 @@ export const actualizarProducto = async (req: any, res: Response): Promise<void>
                 .input('id_img', newImgId)
                 .input('id_prod', id)
                 .input('img_url', img.path)
-                .input('es_princ', 0) // Lo configuramos en el siguiente paso
-                .input('orden', 99) // Se añaden al final de la galería
+                .input('es_princ', 0) // Inicialmente no son principales
+                .input('orden', nextOrden++) // ✨ Orden Dinámico autoincremental
                 .input('id_user', idUsuario)
                 .query(`
                     INSERT INTO dbo.imagenes_producto (id_imagen, id_producto, imagen_url, es_principal, orden, created_by)
@@ -336,46 +426,36 @@ export const actualizarProducto = async (req: any, res: Response): Promise<void>
                 `);
         }
 
-        // C3. Configurar la Imagen Principal (Tanto en la galería como en la tabla productos)
+        // 5. GALERÍA - ASIGNAR LA IMAGEN PRINCIPAL (El BIT 1 y Orden 1)
         const reqMainImg = transaction.request();
         await reqMainImg.input('id_prod', id).query(`
-            -- Primero reseteamos todas a 0
+            -- Apagamos todas las estrellas
             UPDATE dbo.imagenes_producto SET es_principal = 0 WHERE id_producto = @id_prod;
         `);
 
-        if (mainImageId && mainImageId !== 'null' && mainImageId !== 'undefined') {
-            // El usuario eligió una imagen existente como principal
+        if (mainImageId && mainImageId !== 'null' && mainImageId !== 'undefined' && mainImageId !== '') {
             reqMainImg.input('main_id', mainImageId);
             await reqMainImg.query(`
-                UPDATE dbo.imagenes_producto SET es_principal = 1 WHERE id_imagen = @main_id;
-                
-                UPDATE dbo.productos 
-                SET imagen_url = (SELECT imagen_url FROM dbo.imagenes_producto WHERE id_imagen = @main_id)
-                WHERE id_producto = @id_prod;
+                UPDATE dbo.imagenes_producto SET es_principal = 1, orden = 1 WHERE id_imagen = @main_id;
+                UPDATE dbo.productos SET imagen_url = (SELECT imagen_url FROM dbo.imagenes_producto WHERE id_imagen = @main_id) WHERE id_producto = @id_prod;
             `);
-        } else if (firstNewImageId) {
-            // Si se borraron todas y se subieron nuevas, la primera nueva es la principal
-            reqMainImg.input('first_new_id', firstNewImageId);
-            reqMainImg.input('first_new_url', firstNewImageUrl);
+        } else if (idPrincipalNuevo) {
+            reqMainImg.input('first_new_id', idPrincipalNuevo);
+            reqMainImg.input('first_new_url', urlPrincipalNuevo);
             await reqMainImg.query(`
-                UPDATE dbo.imagenes_producto SET es_principal = 1 WHERE id_imagen = @first_new_id;
+                UPDATE dbo.imagenes_producto SET es_principal = 1, orden = 1 WHERE id_imagen = @first_new_id;
                 UPDATE dbo.productos SET imagen_url = @first_new_url WHERE id_producto = @id_prod;
             `);
         }
 
-        // --- D. Auditoría Global ---
+        // 6. AUDITORÍA GLOBAL
         const reqAuditoria = transaction.request();
         await reqAuditoria
-            .input('id_aud', idAuditoria)
+            .input('id_aud', `aud-${uuidv4().substring(0,8)}`)
             .input('id_user', idUsuario)
             .input('id_reg', id)
             .input('ip', req.ip || '127.0.0.1')
-            .input('valores', JSON.stringify({ 
-                nombre: nombreLimpio, 
-                precio: precioNum, 
-                borradas: imagesToDelete.length, 
-                nuevas: imagenesNuevas.length 
-            }))
+            .input('valores', JSON.stringify({ nombre: nombreLimpio, precio: precioNum }))
             .query(`
                 INSERT INTO dbo.auditoria_productos (id_auditoria, id_usuario, tabla_afectada, id_registro_afectado, accion, valores_nuevos, ip_origen)
                 VALUES (@id_aud, @id_user, 'productos', @id_reg, 'UPDATE_COMPLETO', @valores, @ip);
@@ -400,34 +480,31 @@ export const eliminarProducto = async (req: any, res: Response): Promise<void> =
         const { id } = req.params;
         const idUsuario = req.headers['x-user-id'] || 'ADMIN';
         const pool = await getConnection();
+        const idAuditoria = `aud-${uuidv4().substring(0,8)}`;
 
-        // 1. Borrado lógico (Soft Delete)
+        // ✨ NUEVO: Empaquetamos todo en una transacción
         await pool.request()
             .input('id_producto', id)
             .input('id_usuario', idUsuario)
+            .input('id_auditoria', idAuditoria)
+            .input('ip_origen', req.ip || '127.0.0.1')
             .query(`
+                BEGIN TRANSACTION;
+
                 UPDATE dbo.productos 
                 SET deleted_at = SYSUTCDATETIME(), deleted_by = @id_usuario 
                 WHERE id_producto = @id_producto AND deleted_at IS NULL;
-            `);
 
-        // 2. Registro en Auditoría
-        const idAuditoria = `aud-${uuidv4().substring(0,8)}`;
-        await pool.request()
-            .input('id_auditoria', idAuditoria)
-            .input('id_usuario', idUsuario)
-            .input('id_producto', id)
-            .input('ip_origen', req.ip || '127.0.0.1')
-            .query(`
                 INSERT INTO dbo.auditoria_productos (id_auditoria, id_usuario, tabla_afectada, id_registro_afectado, accion, valores_nuevos, ip_origen)
                 VALUES (@id_auditoria, @id_usuario, 'productos', @id_producto, 'SOFT_DELETE', '{}', @ip_origen);
+
+                COMMIT TRANSACTION;
             `);
 
         res.status(200).json({ success: true, message: 'Producto eliminado correctamente.' });
     } catch (error) {
         logger.error(`Error eliminando producto ${req.params.id}:`, error);
         res.status(500).json({ error: 'No se pudo eliminar el producto.' });
-
     }
 };
 
@@ -606,6 +683,8 @@ export const crearResena = async (req: any, res: Response): Promise<void> => {
     try {
         const { id_producto, calificacion, comentario } = req.body;
         const idUsuario = req.headers['x-user-id'] || 'ANONIMO'; 
+        const rawUserName = req.headers['x-user-name'] as string;
+        const nombre_usuario = rawUserName ? decodeURIComponent(rawUserName) : '';
         
         // SEGURIDAD: Sanitización Anti-XSS
         const comentarioLimpio = xss(comentario);
@@ -619,6 +698,7 @@ export const crearResena = async (req: any, res: Response): Promise<void> => {
             .input('id_resena', idResena)
             .input('id_producto', id_producto)
             .input('id_usuario', idUsuario)
+            .input('nombre_usuario_snapshot', nombre_usuario)
             .input('calificacion', calificacion)
             .input('comentario', comentarioLimpio)
             .input('id_auditoria', idAuditoria)
@@ -628,8 +708,8 @@ export const crearResena = async (req: any, res: Response): Promise<void> => {
                 BEGIN TRANSACTION;
                 
                 -- 1. Insertar Reseña
-                INSERT INTO dbo.resenas_producto (id_resena, id_producto, id_usuario, calificacion, comentario)
-                VALUES (@id_resena, @id_producto, @id_usuario, @calificacion, @comentario);
+                INSERT INTO dbo.resenas_producto (id_resena, id_producto, id_usuario, nombre_usuario_snapshot, calificacion, comentario)
+                VALUES (@id_resena, @id_producto, @id_usuario, @nombre_usuario_snapshot, @calificacion, @comentario);
 
                 -- 2. Registro Forense
                 INSERT INTO dbo.auditoria_productos (id_auditoria, id_usuario, tabla_afectada, id_registro_afectado, accion, valores_nuevos, ip_origen)
@@ -659,7 +739,7 @@ export const obtenerResenas = async (req: Request, res: Response): Promise<void>
             .input('offset', offset)
             .input('limit', limit)
             .query(`
-                SELECT id_resena, id_usuario, calificacion, comentario, created_at
+                SELECT id_resena, id_usuario, nombre_usuario_snapshot, calificacion, comentario, created_at
                 FROM dbo.resenas_producto
                 WHERE id_producto = @id_prod AND deleted_at IS NULL
                 ORDER BY created_at DESC
@@ -678,45 +758,60 @@ export const obtenerResenas = async (req: Request, res: Response): Promise<void>
 export const obtenerPromocionesAdmin = async (req: any, res: Response): Promise<void> => {
     try {
         const rolUsuario = req.usuarioRol;
+        const id_tienda = req.usuarioTiendaId;
+
+        // ✨ NUEVO: Captura de parámetros de paginación y búsqueda
+        const page = parseInt(req.query.page as string) || 1;
+        const limit = parseInt(req.query.limit as string) || 10;
+        const safeLimit = limit > 100 ? 100 : limit; 
+        const offset = (page - 1) * safeLimit;
         
-        // ✨ EL DETALLE DEL MIDDLEWARE: 
-        // Nos aseguramos de leer la variable correcta dependiendo de cómo tu middleware guardó el JWT.
-        // Si tu JWT dice "id_tienda", lo ideal es extraerlo así:
-        const id_tienda = req.usuarioTiendaId || req.user?.id_tienda || req.body?.id_tienda;
+        const searchParam = req.query.search ? req.query.search.toString() : null;
+        const sortParam = req.query.sort ? req.query.sort.toString() : 'newest';
 
         const pool = await getConnection();
 
-        // 👑 LÓGICA SUPERADMIN (No necesita tienda, ve toda la red)
-        if (rolUsuario === 'SuperAdministrador') { // <-- Cambiar 'SuperAdmin' por 'SuperAdministrador'
-            const result = await pool.request().query(`
-                SELECT
+        let queryStr = '';
+
+        // 👑 LÓGICA SUPERADMIN
+        if (rolUsuario === 'SuperAdministrador') {
+            queryStr = `
+                DECLARE @TotalRecords INT = (
+                    SELECT COUNT(*) FROM dbo.productos p
+                    WHERE p.deleted_at IS NULL
+                    AND (@search IS NULL OR p.nombre LIKE '%' + @search + '%' OR p.sku LIKE '%' + @search + '%')
+                );
+
+                SELECT 
                     p.id_producto, p.nombre, p.sku, p.precio_base,
                     pr.id_promocion, pr.descuento, pr.fecha_inicio, pr.fecha_fin, pr.id_tienda
                 FROM dbo.productos p
-                -- Usamos LEFT JOIN para traer el producto AUNQUE NO TENGA promoción
                 LEFT JOIN dbo.promociones pr ON p.id_producto = pr.id_producto AND pr.deleted_at IS NULL
                 WHERE p.deleted_at IS NULL
-                ORDER BY p.created_at DESC
-            `);
-            
-            res.status(200).json({ 
-                success: true, 
-                tienda_actual: 'Todas las Sucursales (MODO SUPERADMIN)', 
-                data: result.recordset 
-            });
-            return;
-        }
+                AND (@search IS NULL OR p.nombre LIKE '%' + @search + '%' OR p.sku LIKE '%' + @search + '%')
+                ORDER BY 
+                    CASE WHEN @sort = 'az' THEN p.nombre END ASC,
+                    CASE WHEN @sort = 'za' THEN p.nombre END DESC,
+                    CASE WHEN @sort = 'newest' THEN p.created_at END DESC,
+                    p.created_at DESC
+                OFFSET @offset ROWS FETCH NEXT @limit ROWS ONLY;
 
-        // 🏪 LÓGICA ADMIN (Estrictamente amarrado a su tienda)
-        if (!id_tienda) {
-            logger.warn(`Intento de acceso Admin sin id_tienda en el token. ID Usuario: ${req.usuarioTransaccion}`);
-            res.status(400).json({ error: 'Token inválido: Tu usuario no tiene una tienda asignada en el sistema.' });
-            return;
-        }
+                SELECT @TotalRecords as total_registros;
+            `;
+        } 
+        // 🏪 LÓGICA ADMIN
+        else {
+            if (!id_tienda) {
+                res.status(400).json({ error: 'Token inválido: Tu usuario no tiene una tienda asignada en el sistema.' });
+                return;
+            }
+            queryStr = `
+                DECLARE @TotalRecords INT = (
+                    SELECT COUNT(*) FROM dbo.productos p
+                    WHERE p.deleted_at IS NULL
+                    AND (@search IS NULL OR p.nombre LIKE '%' + @search + '%' OR p.sku LIKE '%' + @search + '%')
+                );
 
-        const result = await pool.request()
-            .input('id_tienda', id_tienda)
-            .query(`
                 SELECT 
                     p.id_producto, p.nombre, p.sku, p.precio_base,
                     pr.id_promocion, pr.descuento, pr.fecha_inicio, pr.fecha_fin, pr.id_tienda
@@ -726,13 +821,39 @@ export const obtenerPromocionesAdmin = async (req: any, res: Response): Promise<
                     AND pr.id_tienda = @id_tienda 
                     AND pr.deleted_at IS NULL
                 WHERE p.deleted_at IS NULL
-                ORDER BY p.created_at DESC
-            `);
+                AND (@search IS NULL OR p.nombre LIKE '%' + @search + '%' OR p.sku LIKE '%' + @search + '%')
+                ORDER BY 
+                    CASE WHEN @sort = 'az' THEN p.nombre END ASC,
+                    CASE WHEN @sort = 'za' THEN p.nombre END DESC,
+                    CASE WHEN @sort = 'newest' THEN p.created_at END DESC,
+                    p.created_at DESC
+                OFFSET @offset ROWS FETCH NEXT @limit ROWS ONLY;
+
+                SELECT @TotalRecords as total_registros;
+            `;
+        }
+
+        const result = await pool.request()
+            .input('id_tienda', id_tienda)
+            .input('offset', offset)
+            .input('limit', safeLimit)
+            .input('search', searchParam)
+            .input('sort', sortParam)
+            .query(queryStr);
+
+        const recordsets = result.recordsets as any[]; 
+        const totalRegistros = recordsets[1][0].total_registros;
 
         res.status(200).json({ 
             success: true, 
-            tienda_actual: id_tienda, 
-            data: result.recordset 
+            tienda_actual: rolUsuario === 'SuperAdministrador' ? 'Todas las Sucursales (MODO SUPERADMIN)' : id_tienda, 
+            meta: {
+                pagina_actual: page,
+                productos_por_pagina: safeLimit,
+                total_productos: totalRegistros,
+                total_paginas: Math.ceil(totalRegistros / safeLimit)
+            },
+            data: recordsets[0]
         });
 
     } catch (error) {
@@ -741,9 +862,6 @@ export const obtenerPromocionesAdmin = async (req: any, res: Response): Promise<
     }
 };
 
-// ==========================================
-// 2. GUARDAR PROMOCION (CREAR O ACTUALIZAR)
-// ==========================================
 export const guardarPromocion = async (req: any, res: Response): Promise<void> => {
     const pool = await getConnection();
     const transaction = pool.transaction();
@@ -754,7 +872,6 @@ export const guardarPromocion = async (req: any, res: Response): Promise<void> =
         const rolUsuario = req.usuarioRol;
 
         // CANDADO DE SEGURIDAD
-        // <-- Cambiar 'SuperAdmin' por 'SuperAdministrador'
         const id_tienda = (rolUsuario === 'SuperAdministrador' && req.body.id_tienda) 
             ? req.body.id_tienda 
             : req.usuarioTiendaId;
@@ -764,37 +881,60 @@ export const guardarPromocion = async (req: any, res: Response): Promise<void> =
             return;
         }
 
-        if (descuento < 0 || descuento > 100) {
-            res.status(400).json({ error: 'El descuento debe ser un valor entre 0 y 100.' });
+        // VALIDACIONES OBLIGATORIAS
+        if (!fecha_inicio || !fecha_fin) {
+            res.status(400).json({ error: 'Ambas fechas (inicio y fin) son obligatorias.' });
+            return;
+        }
+        if (descuento <= 0 || descuento > 100) {
+            res.status(400).json({ error: 'El descuento debe ser mayor a 0 y menor a 100.' });
+            return;
+        }
+
+        // ✨ LA SOLUCIÓN: Convertimos el texto del Frontend a Objetos Date de Node.js
+        const dateInicio = new Date(fecha_inicio);
+        const dateFin = new Date(fecha_fin);
+
+        // Verificamos que las fechas sean reales y válidas
+        if (isNaN(dateInicio.getTime()) || isNaN(dateFin.getTime())) {
+            res.status(400).json({ error: 'Las fechas proporcionadas no tienen un formato válido.' });
             return;
         }
 
         await transaction.begin();
         const request = transaction.request();
 
-        // Ejecutamos la lógica Upsert (Insertar o Actualizar) en SQL
-        const result = await request
+        // Guardamos las fechas estandarizadas en formato ISO para la auditoría JSON
+        const valoresNuevos = JSON.stringify({ 
+            descuento, 
+            tienda: id_tienda, 
+            fecha_inicio: dateInicio.toISOString(), 
+            fecha_fin: dateFin.toISOString() 
+        });
+
+        // Ejecutamos la lógica Upsert
+        await request
             .input('id_producto', id_producto)
             .input('id_tienda', id_tienda)
             .input('descuento', descuento)
-            .input('fecha_inicio', fecha_inicio)
-            .input('fecha_fin', fecha_fin)
+            .input('fecha_inicio', dateInicio) // <-- 🌟 Pasamos el objeto Date directamente (mssql hace la magia)
+            .input('fecha_fin', dateFin)       // <-- 🌟 Pasamos el objeto Date directamente
             .input('id_usuario', idUsuarioReal)
             .input('ip_origen', req.ip || '127.0.0.1')
+            .input('valores_nuevos', valoresNuevos)
             .query(`
                 BEGIN TRY
                     DECLARE @id_promocion_existente VARCHAR(50);
                     DECLARE @id_auditoria VARCHAR(50) = 'aud-' + LEFT(NEWID(), 8);
                     DECLARE @accion VARCHAR(20);
                     
-                    -- Verificamos si la tienda ya tiene una promo para este producto
                     SELECT @id_promocion_existente = id_promocion 
-                    FROM dbo.promociones 
+                    FROM dbo.promociones WITH (UPDLOCK)
                     WHERE id_producto = @id_producto AND id_tienda = @id_tienda AND deleted_at IS NULL;
 
                     IF @id_promocion_existente IS NOT NULL
                     BEGIN
-                        -- ACTUALIZAR PROMOCIÓN EXISTENTE
+                        -- ACTUALIZAR
                         UPDATE dbo.promociones 
                         SET descuento = @descuento, fecha_inicio = @fecha_inicio, fecha_fin = @fecha_fin, 
                             updated_at = SYSUTCDATETIME(), updated_by = @id_usuario
@@ -802,14 +942,12 @@ export const guardarPromocion = async (req: any, res: Response): Promise<void> =
 
                         SET @accion = 'UPDATE_PROMO';
                         
-                        -- Auditoría Update
                         INSERT INTO dbo.auditoria_productos (id_auditoria, id_usuario, tabla_afectada, id_registro_afectado, accion, valores_nuevos, ip_origen)
-                        VALUES (@id_auditoria, @id_usuario, 'promociones', @id_promocion_existente, @accion, 
-                                JSON_MODIFY(JSON_MODIFY('{}', '$.descuento', @descuento), '$.tienda', @id_tienda), @ip_origen);
+                        VALUES (@id_auditoria, @id_usuario, 'promociones', @id_promocion_existente, @accion, @valores_nuevos, @ip_origen);
                     END
                     ELSE
                     BEGIN
-                        -- CREAR NUEVA PROMOCIÓN
+                        -- CREAR
                         DECLARE @id_nueva_promo VARCHAR(50) = 'prm-' + LEFT(NEWID(), 8);
                         
                         INSERT INTO dbo.promociones (id_promocion, id_producto, descuento, fecha_inicio, fecha_fin, id_tienda, created_by)
@@ -817,10 +955,8 @@ export const guardarPromocion = async (req: any, res: Response): Promise<void> =
 
                         SET @accion = 'INSERT_PROMO';
 
-                        -- Auditoría Insert
                         INSERT INTO dbo.auditoria_productos (id_auditoria, id_usuario, tabla_afectada, id_registro_afectado, accion, valores_nuevos, ip_origen)
-                        VALUES (@id_auditoria, @id_usuario, 'promociones', @id_nueva_promo, @accion, 
-                                JSON_MODIFY(JSON_MODIFY('{}', '$.descuento', @descuento), '$.tienda', @id_tienda), @ip_origen);
+                        VALUES (@id_auditoria, @id_usuario, 'promociones', @id_nueva_promo, @accion, @valores_nuevos, @ip_origen);
                     END
                 END TRY
                 BEGIN CATCH
@@ -831,10 +967,15 @@ export const guardarPromocion = async (req: any, res: Response): Promise<void> =
         await transaction.commit();
         res.status(200).json({ success: true, message: 'Promoción guardada exitosamente.' });
 
-    } catch (error) {
-        await transaction.rollback();
+    } catch (error: any) {
+        try {
+            await transaction.rollback();
+        } catch (rollbackError) {
+            // Se ignora silenciosamente porque significa que SQL Server ya la había cancelado
+        }
+        
         logger.error('Error guardando promoción:', error);
-        res.status(500).json({ error: 'Fallo al guardar la promoción en la base de datos.' });
+        res.status(500).json({ error: error.message || 'Fallo interno al procesar la promoción en base de datos.' });
     }
 };
 
@@ -870,78 +1011,20 @@ export const obtenerProductosAdmin = async (req: any, res: Response): Promise<vo
         const rolUsuario = req.usuarioRol;
         const id_tienda = req.usuarioTiendaId;
         
-        // 1. Parámetros de URL
         const page = parseInt(req.query.page as string) || 1;
         const limit = parseInt(req.query.limit as string) || 20;
         const safeLimit = limit > 100 ? 100 : limit; 
         const offset = (page - 1) * safeLimit;
         
-        // ✨ NUEVO: Parámetros de Búsqueda y Ordenamiento
         const searchParam = req.query.search ? req.query.search.toString() : null;
-        const sortParam = req.query.sort ? req.query.sort.toString() : 'newest'; // newest, az, za
+        const sortParam = req.query.sort ? req.query.sort.toString() : 'newest';
 
         const pool = await getConnection();
+        let queryStr = '';
 
-        // 👑 SUPERADMINISTRADOR: Ve el catálogo maestro global
+        // 👑 LÓGICA SUPERADMIN
         if (rolUsuario === 'SuperAdministrador') {
-            const result = await pool.request()
-                .input('offset', offset)
-                .input('limit', safeLimit)
-                .input('search', searchParam)
-                .input('sort', sortParam)
-                .query(`
-                DECLARE @TotalRecords INT = (
-                    SELECT COUNT(*) FROM dbo.productos 
-                    WHERE deleted_at IS NULL
-                    AND (@search IS NULL OR nombre LIKE '%' + @search + '%' OR sku LIKE '%' + @search + '%')
-                );
-
-                SELECT p.id_producto, p.nombre, p.precio_base, p.sku, c.nombre as categoria
-                FROM dbo.productos p
-                LEFT JOIN dbo.categorias c ON p.id_categoria = c.id_categoria
-                WHERE p.deleted_at IS NULL
-                AND (@search IS NULL OR p.nombre LIKE '%' + @search + '%' OR p.sku LIKE '%' + @search + '%')
-                ORDER BY 
-                    CASE WHEN @sort = 'az' THEN p.nombre END ASC,
-                    CASE WHEN @sort = 'za' THEN p.nombre END DESC,
-                    CASE WHEN @sort = 'newest' THEN p.created_at END DESC,
-                    p.created_at DESC -- Fallback de seguridad
-                OFFSET @offset ROWS FETCH NEXT @limit ROWS ONLY;
-
-                SELECT @TotalRecords as total_registros;
-            `);
-            
-            const recordsets = result.recordsets as any[]; 
-            const totalRegistros = recordsets[1][0].total_registros;
-
-            res.status(200).json({ 
-                success: true, 
-                rol: 'SuperAdministrador', 
-                contexto: 'Catálogo Global (Sede Central)', 
-                meta: {
-                    pagina_actual: page,
-                    productos_por_pagina: safeLimit,
-                    total_productos: totalRegistros,
-                    total_paginas: Math.ceil(totalRegistros / safeLimit)
-                },
-                data: recordsets[0]
-            });
-            return;
-        }
-
-        // 🏪 ADMINISTRADOR: Ve el catálogo global + SU stock físico
-        if (!id_tienda) {
-            res.status(403).json({ error: 'Acceso denegado: No tienes una sucursal asignada.' });
-            return;
-        }
-
-        const result = await pool.request()
-            .input('id_tienda', id_tienda)
-            .input('offset', offset)
-            .input('limit', safeLimit)
-            .input('search', searchParam)
-            .input('sort', sortParam)
-            .query(`
+            queryStr = `
                 DECLARE @TotalRecords INT = (
                     SELECT COUNT(*) FROM dbo.productos 
                     WHERE deleted_at IS NULL
@@ -949,11 +1032,13 @@ export const obtenerProductosAdmin = async (req: any, res: Response): Promise<vo
                 );
 
                 SELECT 
-                    p.id_producto, p.nombre, p.precio_base, p.sku, c.nombre as categoria,
-                    ISNULL(i.stock_disponible, 0) as stock_local
+                    p.id_producto, p.nombre, p.sku, p.precio_base, c.nombre as categoria,
+                    pr.descuento as descuento,
+                    pr.fecha_inicio as promo_inicio, -- ✨ NUEVO: Agregamos la fecha de inicio
+                    pr.fecha_fin as promo_fin
                 FROM dbo.productos p
                 LEFT JOIN dbo.categorias c ON p.id_categoria = c.id_categoria
-                LEFT JOIN dbo.inventarios i ON p.id_producto = i.id_producto AND i.id_tienda = @id_tienda
+                LEFT JOIN dbo.promociones pr ON p.id_producto = pr.id_producto AND pr.id_tienda = 'tnd-matriz' AND pr.deleted_at IS NULL AND SYSUTCDATETIME() BETWEEN pr.fecha_inicio AND pr.fecha_fin
                 WHERE p.deleted_at IS NULL
                 AND (@search IS NULL OR p.nombre LIKE '%' + @search + '%' OR p.sku LIKE '%' + @search + '%')
                 ORDER BY 
@@ -964,15 +1049,58 @@ export const obtenerProductosAdmin = async (req: any, res: Response): Promise<vo
                 OFFSET @offset ROWS FETCH NEXT @limit ROWS ONLY;
 
                 SELECT @TotalRecords as total_registros;
-            `);
-            
+            `;
+        } 
+        // 🏪 LÓGICA ADMIN
+        else {
+            if (!id_tienda) {
+                res.status(400).json({ error: 'Token inválido: Tu usuario no tiene una tienda asignada en el sistema.' });
+                return;
+            }
+            queryStr = `
+                DECLARE @TotalRecords INT = (
+                    SELECT COUNT(*) FROM dbo.productos 
+                    WHERE deleted_at IS NULL
+                    AND (@search IS NULL OR nombre LIKE '%' + @search + '%' OR sku LIKE '%' + @search + '%')
+                );
+
+                SELECT 
+                    p.id_producto, p.nombre, p.sku, p.precio_base, c.nombre as categoria,
+                    ISNULL(ir.stock_disponible, 0) as stock_local,
+                    pr.descuento as descuento,
+                    pr.fecha_inicio as promo_inicio, -- ✨ NUEVO: Agregamos la fecha de inicio
+                    pr.fecha_fin as promo_fin
+                FROM dbo.productos p
+                LEFT JOIN dbo.categorias c ON p.id_categoria = c.id_categoria
+                LEFT JOIN dbo.inventarios_replica ir ON p.id_producto = ir.id_producto AND ir.id_tienda = @id_tienda
+                LEFT JOIN dbo.promociones pr ON p.id_producto = pr.id_producto AND pr.id_tienda = @id_tienda AND pr.deleted_at IS NULL AND SYSUTCDATETIME() BETWEEN pr.fecha_inicio AND pr.fecha_fin
+                WHERE p.deleted_at IS NULL
+                AND (@search IS NULL OR p.nombre LIKE '%' + @search + '%' OR p.sku LIKE '%' + @search + '%')
+                ORDER BY 
+                    CASE WHEN @sort = 'az' THEN p.nombre END ASC,
+                    CASE WHEN @sort = 'za' THEN p.nombre END DESC,
+                    CASE WHEN @sort = 'newest' THEN p.created_at END DESC,
+                    p.created_at DESC
+                OFFSET @offset ROWS FETCH NEXT @limit ROWS ONLY;
+
+                SELECT @TotalRecords as total_registros;
+            `;
+        }
+
+        const result = await pool.request()
+            .input('id_tienda', id_tienda)
+            .input('offset', offset)
+            .input('limit', safeLimit)
+            .input('search', searchParam)
+            .input('sort', sortParam)
+            .query(queryStr);
+
         const recordsets = result.recordsets as any[]; 
         const totalRegistros = recordsets[1][0].total_registros;
 
         res.status(200).json({ 
             success: true, 
-            rol: 'Administrador', 
-            contexto: `Gestión de Sucursal`, 
+            tienda_actual: rolUsuario === 'SuperAdministrador' ? 'Todas las Sucursales (MODO SUPERADMIN)' : id_tienda, 
             meta: {
                 pagina_actual: page,
                 productos_por_pagina: safeLimit,
@@ -981,8 +1109,74 @@ export const obtenerProductosAdmin = async (req: any, res: Response): Promise<vo
             },
             data: recordsets[0]
         });
+
     } catch (error) {
-        logger.error('Error al obtener productos para panel admin:', error);
-        res.status(500).json({ error: 'Error interno al cargar la tabla de administración.' });
+        logger.error('Error al obtener promociones admin:', error);
+        res.status(500).json({ error: 'Error interno del servidor.' });
+    }
+};
+
+// GET: Inventario en Red (Tabla cruzada: Matriz vs Local)
+export const obtenerInventarioRed = async (req: any, res: Response): Promise<void> => {
+    try {
+        const id_tienda = req.usuarioTiendaId;
+        const ID_SEDE_CENTRAL = 'tnd-matriz';
+
+        const page = parseInt(req.query.page as string) || 1;
+        const limit = parseInt(req.query.limit as string) || 10;
+        const search = req.query.search ? req.query.search.toString() : null;
+        const sortParam = req.query.sort ? req.query.sort.toString() : 'newest'; // ✨ NUEVO
+        const offset = (page - 1) * limit;
+
+        const pool = await getConnection();
+        const result = await pool.request()
+            .input('id_tienda', id_tienda)
+            .input('id_matriz', ID_SEDE_CENTRAL)
+            .input('search', search)
+            .input('sort', sortParam) // ✨ NUEVO
+            .input('limit', limit)
+            .input('offset', offset)
+            .query(`
+                DECLARE @Total INT = (SELECT COUNT(*) FROM dbo.productos WHERE deleted_at IS NULL AND (@search IS NULL OR nombre LIKE '%' + @search + '%' OR sku LIKE '%' + @search + '%'));
+
+                SELECT 
+                    p.id_producto, p.sku, p.nombre, 
+                    
+                    -- ✨ CORRECCIÓN: Imagen Principal Dinámica
+                    ISNULL(
+                        (SELECT TOP 1 imagen_url FROM dbo.imagenes_producto 
+                         WHERE id_producto = p.id_producto AND es_principal = 1 AND deleted_at IS NULL),
+                        p.imagen_url
+                    ) AS imagen_url,
+                    
+                    ISNULL(inv_local.stock_disponible, 0) as stock_local,
+                    ISNULL(inv_matriz.stock_disponible, 0) as stock_matriz
+                FROM dbo.productos p
+                LEFT JOIN dbo.inventarios_replica inv_local ON p.id_producto = inv_local.id_producto AND inv_local.id_tienda = @id_tienda
+                LEFT JOIN dbo.inventarios_replica inv_matriz ON p.id_producto = inv_matriz.id_producto AND inv_matriz.id_tienda = @id_matriz
+                WHERE p.deleted_at IS NULL AND (@search IS NULL OR p.nombre LIKE '%' + @search + '%' OR p.sku LIKE '%' + @search + '%')
+                ORDER BY 
+                    -- ✨ NUEVO: Lógica dinámica de ordenamiento
+                    CASE WHEN @sort = 'az' THEN p.nombre END ASC,
+                    CASE WHEN @sort = 'za' THEN p.nombre END DESC,
+                    CASE WHEN @sort = 'newest' THEN p.created_at END DESC,
+                    p.created_at DESC
+                OFFSET @offset ROWS FETCH NEXT @limit ROWS ONLY;
+
+                SELECT @Total as total;
+            `);
+
+        const recordsets = result.recordsets as unknown as any[][];
+        const data = recordsets[0] || [];
+        const total = (recordsets[1] && recordsets[1][0]) ? recordsets[1][0].total : 0;
+
+        res.status(200).json({
+            success: true,
+            meta: { pagina_actual: page, total_paginas: Math.ceil(total / limit) },
+            data
+        });
+    } catch (error) {
+        logger.error('Error al cargar el inventario en red:', error);
+        res.status(500).json({ error: 'Error al cargar el inventario en red' });
     }
 };

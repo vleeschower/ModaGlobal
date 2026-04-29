@@ -18,7 +18,10 @@ import DashboardUsuarios from './pages/dashboard/usuarios/usuarios';
 import PerfilDashboard from './pages/dashboard/usuarios/miPerfil';
 import AdminProductList from './pages/dashboard/AdminProductList';
 import ProductManager from './pages/ProductManager';
+import PromocionesAdmin from './pages/dashboard/PromocionesAdmin';
 import Inventario from './pages/inventario';
+import SolicitudesStock from './pages/dashboard/SolicitudesStock';
+import TiendasDashboard from './pages/dashboard/TiendasDashboard';
 
 function App() {
   return (
@@ -94,6 +97,26 @@ function App() {
           <Route path="/dashboard/producto/editar/:id" element={
             <ProtectedRoute allowedRoles={['SuperAdministrador']}>
               <ProductManager />
+            </ProtectedRoute>
+          } />
+
+          <Route path="/dashboard/promociones" element={
+            // ✨ CORRECCIÓN: Agregamos 'Administrador' para que los gerentes de tienda puedan entrar
+            <ProtectedRoute allowedRoles={['SuperAdministrador', 'Administrador']}>
+              <PromocionesAdmin />
+            </ProtectedRoute>
+          } />
+
+          {/* ✨ NUEVA RUTA PARA LAS SOLICITUDES DE STOCK */}
+          <Route path="/dashboard/solicitudes" element={
+            <ProtectedRoute allowedRoles={['SuperAdministrador', 'Administrador']}>
+              <SolicitudesStock />
+            </ProtectedRoute>
+          } />
+
+          <Route path="/dashboard/tiendas" element={
+            <ProtectedRoute allowedRoles={['SuperAdministrador', 'Administrador']}>
+              <TiendasDashboard />
             </ProtectedRoute>
           } />
 

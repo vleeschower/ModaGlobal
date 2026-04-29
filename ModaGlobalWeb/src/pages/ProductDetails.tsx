@@ -175,10 +175,29 @@ const ProductDetails: React.FC = () => {
               {product.nombre}
             </h1>
             
+            {/* ✨ PRECIOS Y PROMOCIONES */}
             <div className="flex items-center gap-4 mb-6">
-              <span className="text-3xl font-black text-slate-900">
-                ${Number(product.precio_base).toFixed(2)}
-              </span>
+              <div className="flex flex-col">
+                  {(product.descuento_local && product.descuento_local > 0) ? (
+                      <>
+                          <span className="text-gray-400 text-lg line-through font-bold">
+                              ${Number(product.precio_base).toFixed(2)}
+                          </span>
+                          <div className="flex items-center gap-3">
+                              <span className="text-4xl font-black text-emerald-500">
+                                  ${(Number(product.precio_base) - (Number(product.precio_base) * (product.descuento_local / 100))).toFixed(2)}
+                              </span>
+                              <span className="bg-amber-100 text-amber-700 px-2 py-1 rounded-md text-sm font-black">
+                                  -{product.descuento_local}% OFF
+                              </span>
+                          </div>
+                      </>
+                  ) : (
+                      <span className="text-4xl font-black text-slate-900">
+                        ${Number(product.precio_base).toFixed(2)}
+                      </span>
+                  )}
+              </div>
             </div>
 
             <p className="text-gray-500 text-lg leading-relaxed mb-8">
@@ -186,19 +205,45 @@ const ProductDetails: React.FC = () => {
             </p>
 
             <div className="space-y-6 pt-6 border-t border-gray-100">
-              <div className="flex items-center gap-6">
-                <div className="flex items-center border border-gray-200 rounded-xl overflow-hidden bg-gray-50 h-14">
-                  <button onClick={() => setQuantity(q => Math.max(1, q-1))} className="px-5 h-full hover:bg-gray-200 transition-colors font-bold">-</button>
-                  <span className="px-6 font-bold text-slate-900 w-12 text-center">{quantity}</span>
-                  <button onClick={() => setQuantity(q => q+1)} className="px-5 h-full hover:bg-gray-200 transition-colors font-bold">+</button>
-                </div>
-                <button className="flex-1 h-14 bg-slate-900 text-white rounded-2xl font-bold hover:bg-emerald-500 transition-all shadow-xl shadow-slate-900/10 flex items-center justify-center gap-3 active:scale-95">
-                  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-5 h-5">
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 3h1.386c.51 0 .955.343 1.087.835l.383 1.437M7.5 14.25a3 3 0 0 0-3 3h15.75m-12.75-3h11.218c1.121-2.3 2.1-4.684 2.924-7.138a60.114 60.114 0 0 0-16.536-1.84M7.5 14.25 5.106 5.272M6 20.25a.75.75 0 1 1-1.5 0 .75.75 0 0 1 1.5 0Zm12.75 0a.75.75 0 1 1-1.5 0 .75.75 0 0 1 1.5 0Z" />
-                  </svg>
-                  Añadir al carrito
-                </button>
-              </div>
+              
+              {/* ✨ VALIDACIÓN OMNICANAL: ¿HAY STOCK? */}
+              {(!product.stock_local || product.stock_local <= 0) ? (
+                  <div className="bg-red-50 border border-red-100 p-6 rounded-2xl flex items-center justify-between">
+                      <div>
+                          <h4 className="text-red-600 font-black text-lg flex items-center gap-2">
+                              <span className="material-symbols-outlined">block</span> Producto Agotado
+                          </h4>
+                          <p className="text-red-500/80 text-sm font-bold mt-1">
+                              El stock restante fue {product.razon_agotado || 'vendido recientemente'}.
+                          </p>
+                      </div>
+                      <button disabled className="bg-red-200 text-red-400 px-6 py-3 rounded-xl font-bold cursor-not-allowed">
+                          No disponible
+                      </button>
+                  </div>
+              ) : (
+                  <div className="flex items-center gap-6">
+                      <div className="flex items-center border border-gray-200 rounded-xl overflow-hidden bg-gray-50 h-14">
+                        <button onClick={() => setQuantity(q => Math.max(1, q-1))} className="px-5 h-full hover:bg-gray-200 transition-colors font-bold">-</button>
+                        <span className="px-6 font-bold text-slate-900 w-12 text-center">{quantity}</span>
+                        {/* Evitamos que el usuario pida más del stock físico que hay en tienda */}
+                        <button onClick={() => setQuantity(q => Math.min(product.stock_local || 1, q+1))} className="px-5 h-full hover:bg-gray-200 transition-colors font-bold">+</button>
+                      </div>
+                      <button className="flex-1 h-14 bg-slate-900 text-white rounded-2xl font-bold hover:bg-emerald-500 transition-all shadow-xl shadow-slate-900/10 flex items-center justify-center gap-3 active:scale-95">
+                        <span className="material-symbols-outlined">shopping_cart</span>
+                        Añadir al carrito
+                      </button>
+                  </div>
+              )}
+              
+              {/* Aviso extra de stock limitado */}
+              {(product.stock_local && product.stock_local > 0 && product.stock_local <= 5) && (
+                  <p className="text-amber-600 text-sm font-bold flex items-center gap-1">
+                      <span className="material-symbols-outlined text-[16px]">warning</span>
+                      ¡Date prisa! Solo quedan {product.stock_local} unidades en tu sucursal.
+                  </p>
+              )}
+
             </div>
           </div>
         </div>
@@ -250,14 +295,22 @@ const ProductDetails: React.FC = () => {
                                 <div key={resena.id_resena} className="p-6 bg-white border border-gray-100 rounded-2xl shadow-sm">
                                     <div className="flex items-center justify-between mb-3">
                                         <div className="flex items-center gap-3">
-                                            <div className="w-10 h-10 bg-slate-900 text-white rounded-full flex items-center justify-center font-bold uppercase">
-                                                {resena.id_usuario.substring(0, 2)}
-                                            </div>
-                                            <div>
-                                                <p className="font-bold text-slate-900 text-sm">Usuario {resena.id_usuario.substring(0, 5)}...</p>
-                                                <p className="text-xs text-gray-400">{new Date(resena.created_at).toLocaleDateString()}</p>
-                                            </div>
-                                        </div>
+                                          {/* ✨ Usamos el snapshot para las iniciales */}
+                                          <div className="w-10 h-10 bg-slate-900 text-white rounded-full flex items-center justify-center font-bold uppercase">
+                                              {resena.nombre_usuario_snapshot 
+                                                  ? resena.nombre_usuario_snapshot.substring(0, 2) 
+                                                  : resena.id_usuario.substring(0, 2)}
+                                          </div>
+                                          <div>
+                                              {/* ✨ Mostramos el snapshot como nombre principal */}
+                                              <p className="font-bold text-slate-900 text-sm">
+                                                  {resena.nombre_usuario_snapshot || ''}
+                                              </p>
+                                              <p className="text-xs text-gray-400">
+                                                  {new Date(resena.created_at).toLocaleDateString()}
+                                              </p>
+                                          </div>
+                                      </div>
                                         <div className="flex">{renderStars(resena.calificacion)}</div>
                                     </div>
                                     <p className="text-gray-600 text-sm leading-relaxed">{resena.comentario}</p>

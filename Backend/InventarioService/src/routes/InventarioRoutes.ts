@@ -1,32 +1,56 @@
 import { Router } from 'express';
-import { consultarStock, ajustarStock, crearTienda } from '../controllers/InventarioController';
-import { verificarAccesoInterno, verificarRol } from '../middlewares/Security';
-import { obtenerTiendas } from '../controllers/InventarioController';
+import { 
+    consultarStock, 
+    ajustarStock, 
+    crearTienda, 
+    solicitarStock, 
+    obtenerSolicitudes, 
+    responderSolicitud, 
+    obtenerTodasTiendas,
+    obtenerTiendasPublicas
+} from '../controllers/InventarioController';
+import { verificarAccesoInterno, verificarRol, verificarApiKey } from '../middlewares/Security';
 
 const router = Router();
 
 // ==========================================
-// SEGURIDAD PERIMETRAL
+// 1. SEGURIDAD ZERO TRUST (Aplica a TODAS las rutas)
 // ==========================================
-// Obligamos a que TODAS las peticiones vengan del API Gateway
-router.use(verificarAccesoInterno);
+router.use(verificarApiKey);
 
 // ==========================================
-// RUTAS PÚBLICAS (Para usuarios logueados)
+// 2. RUTAS PÚBLICAS (Deben ir ANTES de verificarAccesoInterno)
 // ==========================================
-// Un cliente normal debe poder ver si hay stock en su tienda local para comprar
+
+router.get('/publicas', obtenerTiendasPublicas);
+// Invitados y clientes pueden ver si hay stock de un producto
 router.get('/stock/:id_producto', consultarStock);
 
 // ==========================================
-// RUTAS OPERATIVAS / ADMIN
+// 3. BARRERA DE SESIÓN (A partir de aquí, exige Token JWT)
 // ==========================================
-// Solo los gerentes y personal de almacén pueden ingresar o dar de baja mercancía
-router.post('/ajustar', verificarRol(['Admin', 'SuperAdmin']), ajustarStock);
+router.use(verificarAccesoInterno);
 
-// Solo la alta gerencia puede abrir nuevas sucursales físicas/bodegas
-router.post('/tiendas', verificarRol(['SuperAdmin']), crearTienda);
+// ==========================================
+// 4. RUTAS PRIVADAS ESTÁTICAS (SuperAdmin / Admin)
+// ==========================================
 
-// Ruta para obtener tiendas (solo admins)
-router.get('/tiendas', verificarRol(['SuperAdministrador', 'Administrador']), obtenerTiendas);
+// SUCURSALES (Usamos solo la versión paginada)
+router.get('/tiendas', verificarRol(['SuperAdministrador', 'Administrador']), obtenerTodasTiendas);
+router.post('/tiendas', verificarRol(['SuperAdministrador']), crearTienda);
+
+// WORKFLOW: SOLICITUDES DE STOCK
+router.post('/solicitudes', verificarRol(['Administrador']), solicitarStock);
+router.get('/solicitudes', verificarRol(['Administrador', 'SuperAdministrador']), obtenerSolicitudes);
+
+// AJUSTES MANUALES (Mermas, entradas directas)
+router.post('/ajustar', verificarRol(['Administrador', 'SuperAdministrador']), ajustarStock);
+
+// ==========================================
+// 5. RUTAS PRIVADAS DINÁMICAS (Llevan parámetros como :id)
+// ==========================================
+// Solo el Súper Admin aprueba o rechaza
+router.put('/solicitudes/:id_solicitud/responder', verificarRol(['SuperAdministrador']), responderSolicitud);
+
 
 export default router;

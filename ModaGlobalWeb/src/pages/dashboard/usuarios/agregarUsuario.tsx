@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import Swal from 'sweetalert2';
 import { userService } from '../../../services/UserService';
+import { apiService } from '../../../services/ApiService';
 
 interface AddUserModalProps {
   isOpen: boolean;
@@ -49,19 +50,13 @@ const AddUserModal: React.FC<AddUserModalProps> = ({
 
   const cargarTiendas = async () => {
     setLoadingTiendas(true);
-    try {
-      const token = localStorage.getItem('mg_token');
-      const response = await fetch('http://localhost:3000/api/inventario/tiendas', {
-        headers: {
-          'Authorization': `Bearer ${token}`
-        }
-      });
-      const data = await response.json();
-      if (data.success) {
-        setTiendas(data.data);
-      }
-    } catch (error) {
-      console.error('Error cargando tiendas:', error);
+    const res = await apiService.getTiendas();
+    
+    if (res.success && res.data) {
+      setTiendas(res.data);
+    } else {
+      console.error('Error cargando tiendas:', res.message);
+      // Opcional: Podrías mostrar un Swal de error aquí si falla la carga
     }
     setLoadingTiendas(false);
   };

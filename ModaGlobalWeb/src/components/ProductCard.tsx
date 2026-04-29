@@ -9,27 +9,30 @@ interface ProductCardProps {
 }
 
 const ProductCard: React.FC<ProductCardProps> = ({ product }) => {
-    const imageUrl = product.imagen_url || 'https://via.placeholder.com/500?text=Sin+Imagen';
+    const imagenUrl = product.imagen_url || 'https://via.placeholder.com/500?text=Sin+Imagen';
     const { isSuperAdmin } = useAuth();
     
-    // Estados para el Modal de Eliminación
     const [showDeleteModal, setShowDeleteModal] = useState(false);
     const [isDeleting, setIsDeleting] = useState(false);
 
-    // Abre el modal previniendo que se abra el enlace del producto
+    // ✨ LÓGICA OMNICANAL: Precios y Stock
+    const isAgotado = (product.stock_local === undefined || product.stock_local <= 0);
+    const hasPromo = product.descuento_local && product.descuento_local > 0;
+    const precioOriginal = Number(product.precio_base);
+    const precioFinal = hasPromo 
+        ? precioOriginal - (precioOriginal * (Number(product.descuento_local) / 100)) 
+        : precioOriginal;
+
     const triggerDelete = (e: React.MouseEvent) => {
         e.preventDefault(); 
         setShowDeleteModal(true);
     };
 
-    // Ejecuta la eliminación real
     const confirmDelete = async () => {
         setIsDeleting(true);
         const res = await apiService.eliminarProducto(product.id_producto);
-        
         if (res.success) {
             setShowDeleteModal(false);
-            // Recargamos la página para que el catálogo traiga la lista fresca (sin el eliminado)
             window.location.reload(); 
         } else {
             alert(res.message || 'Error al eliminar el producto');
@@ -39,46 +42,78 @@ const ProductCard: React.FC<ProductCardProps> = ({ product }) => {
 
     return (
         <>
-            <div className="group bg-white rounded-2xl overflow-hidden hover:shadow-xl transition-all duration-300 border border-gray-100 flex flex-col h-full relative">
+            <div className={`group bg-white rounded-2xl overflow-hidden hover:shadow-xl transition-all duration-300 border border-gray-100 flex flex-col h-full relative ${isAgotado ? 'opacity-80 grayscale-20%' : ''}`}>
                 
                 <Link to={`/producto/${product.id_producto}`} className="flex flex-col h-full">
                     <div className="aspect-4/3 bg-gray-50 relative overflow-hidden">
                         <img 
-                            src={imageUrl} 
+                            src={imagenUrl} 
                             alt={product.nombre}
-                            className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700" 
+                            className={`w-full h-full object-cover transition-transform duration-700 ${isAgotado ? '' : 'group-hover:scale-105'}`} 
                         />
-                        {product.nombre_categoria && (
-                            <span className="absolute top-3 left-3 bg-white/90 backdrop-blur-sm text-[10px] font-bold px-2 py-1 rounded uppercase text-slate-700 tracking-wider shadow-sm">
-                                {product.nombre_categoria}
-                            </span>
-                        )}
+                        {/* Etiquetas */}
+                        <div className="absolute top-3 left-3 flex flex-col gap-2">
+                            {product.nombre_categoria && (
+                                <span className="bg-white/90 backdrop-blur-sm text-[10px] font-bold px-2 py-1 rounded uppercase text-slate-700 tracking-wider shadow-sm w-max">
+                                    {product.nombre_categoria}
+                                </span>
+                            )}
+                            {isAgotado && (
+                                <span className="bg-red-600 text-white text-[10px] font-black px-2 py-1 rounded uppercase tracking-widest shadow-sm w-max">
+                                    AGOTADO
+                                </span>
+                            )}
+                        </div>
                     </div>
                     
                     <div className="p-4 flex flex-col grow">
-                        <h4 className="font-bold text-slate-800 text-base mb-1 line-clamp-2 group-hover:text-emerald-500 transition-colors">
+                        <h4 className={`font-bold text-base mb-1 line-clamp-2 transition-colors ${isAgotado ? 'text-gray-500' : 'text-slate-800 group-hover:text-emerald-500'}`}>
                             {product.nombre}
                         </h4>
-                        <p className="text-gray-500 text-sm mb-4 line-clamp-2 grow">
-                            {product.descripcion || 'Sin descripción disponible.'}
-                        </p>
                         
-                        <div className="flex justify-between items-center mt-auto pt-3 border-t border-gray-50">
-                            <span className="text-emerald-500 font-black text-xl">
-                                ${Number(product.precio_base).toFixed(2)}
-                            </span>
+                        {/* Lógica de Texto Omnicanal */}
+                        {isAgotado ? (
+                            <p className="text-red-500 text-xs font-bold mb-4 flex items-center gap-1">
+                                <span className="material-symbols-outlined text-[14px]">storefront</span>
+                                Últimas unidades vendidas
+                            </p>
+                        ) : (
+                            <p className="text-gray-500 text-sm mb-4 line-clamp-2 grow">
+                                {product.descripcion || 'Sin descripción disponible.'}
+                            </p>
+                        )}
+                        
+                        <div className="flex justify-between items-end mt-auto pt-3 border-t border-gray-50">
+                            <div className="flex flex-col">
+                                {hasPromo && !isAgotado && (
+                                    <span className="text-gray-400 text-xs line-through font-bold">${precioOriginal.toFixed(2)}</span>
+                                )}
+                                <span className={`${isAgotado ? 'text-gray-400' : 'text-emerald-500'} font-black text-xl leading-none`}>
+                                    ${precioFinal.toFixed(2)}
+                                </span>
+                            </div>
                         </div>
                     </div>
                 </Link>
 
                 {/* Botón del Carrito */}
                 <button 
-                    onClick={(e) => { e.preventDefault(); }}
-                    className="absolute bottom-4 right-4 bg-slate-900 text-white p-2.5 rounded-full hover:bg-emerald-500 transition-all shadow-md active:scale-90"
+                    onClick={(e) => { 
+                        e.preventDefault(); 
+                        if(!isAgotado) {
+                            console.log('Añadir al carrito');
+                        }
+                    }}
+                    disabled={isAgotado}
+                    className={`absolute bottom-4 right-4 p-2 rounded-full shadow-md transition-all ${
+                        isAgotado 
+                        ? 'bg-gray-200 text-gray-400 cursor-not-allowed' 
+                        : 'bg-slate-900 text-white hover:bg-emerald-500 active:scale-90'
+                    }`}
                 >
-                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-5 h-5">
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 3h1.386c.51 0 .955.343 1.087.835l.383 1.437M7.5 14.25a3 3 0 0 0-3 3h15.75m-12.75-3h11.218c1.121-2.3 2.1-4.684 2.924-7.138a60.114 60.114 0 0 0-16.536-1.84M7.5 14.25 5.106 5.272M6 20.25a.75.75 0 1 1-1.5 0 .75.75 0 0 1 1.5 0Zm12.75 0a.75.75 0 1 1-1.5 0 .75.75 0 0 1 1.5 0Z" />
-                    </svg>
+                    <span className="material-symbols-outlined text-[20px]">
+                        {isAgotado ? 'remove_shopping_cart' : 'shopping_bag'}
+                    </span>
                 </button>
 
                 {/* PANEL DE ADMIN FLOTANTE */}
@@ -93,7 +128,6 @@ const ProductCard: React.FC<ProductCardProps> = ({ product }) => {
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
                             </svg>
                         </Link>
-                        
                         <button 
                             onClick={triggerDelete}
                             className="bg-white/80 backdrop-blur border border-red-100 p-2 rounded-lg text-red-600 hover:bg-red-600 hover:text-white transition-colors shadow-sm"
@@ -109,26 +143,21 @@ const ProductCard: React.FC<ProductCardProps> = ({ product }) => {
 
             {/* ✨ MODAL DE ELIMINACIÓN ✨ */}
             {showDeleteModal && (
-                <div className="fixed inset-0 z-100 flex items-center justify-center bg-slate-900/40 backdrop-blur-sm p-4">
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 backdrop-blur-sm p-4">
                     <div className="bg-white rounded-3xl p-8 max-w-sm w-full text-center shadow-2xl transform transition-all scale-100 opacity-100">
-                        
-                        {/* Alerta Visual */}
                         <div className="w-16 h-16 bg-red-100 text-red-500 rounded-full flex items-center justify-center mx-auto mb-4">
                             <svg className="w-8 h-8" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                                 <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
                             </svg>
                         </div>
-                        
                         <h3 className="text-xl font-black text-slate-900 mb-2">¿Eliminar producto?</h3>
                         <p className="text-gray-500 mb-6 text-sm">Esta acción ocultará el producto del catálogo de ModaGlobal.</p>
                         
-                        {/* Vista previa del producto a eliminar */}
                         <div className="bg-gray-50 p-3 rounded-xl flex items-center gap-4 mb-8 text-left border border-gray-100">
-                            <img src={imageUrl} alt={product.nombre} className="w-12 h-12 rounded-lg object-cover" />
+                            <img src={imagenUrl} alt={product.nombre} className="w-12 h-12 rounded-lg object-cover" />
                             <span className="font-bold text-slate-700 text-sm line-clamp-2">{product.nombre}</span>
                         </div>
                         
-                        {/* Botones de acción */}
                         <div className="flex gap-3">
                             <button 
                                 onClick={() => setShowDeleteModal(false)}

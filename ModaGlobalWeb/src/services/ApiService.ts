@@ -48,6 +48,7 @@ const getToken = (): string | null => {
 };
 
 // 4. Función Helper para inyectar el Token en las peticiones
+// 4. Función Helper para inyectar el Token y la TIENDA en las peticiones
 const getAuthHeaders = (): HeadersInit => {
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
@@ -57,6 +58,10 @@ const getAuthHeaders = (): HeadersInit => {
   if (token) {
     headers['Authorization'] = `Bearer ${token}`;
   }
+
+  // ✨ LA MAGIA OMNICANAL: Le decimos al backend qué tienda estamos viendo
+  const tiendaSeleccionada = localStorage.getItem('mg_tienda_seleccionada') || 'tnd-matriz';
+  headers['x-tienda-cercana'] = tiendaSeleccionada;
 
   return headers;
 };
@@ -106,6 +111,145 @@ export const apiService = {
     } catch (error) {
       console.error('Error en getProductoStock:', error);
       return { success: false, message: 'No se pudo obtener el stock.' };
+    }
+  },
+
+  // ✨ NUEVA FUNCIÓN: Obtener todas las tiendas
+  getTiendas: async (): Promise<ApiResponse<any[]>> => {
+    try {
+      if (!checkAuth()) {
+        return { success: false, message: 'No autenticado. Por favor inicia sesión.' };
+      }
+
+      const response = await fetch(`${API_BASE_URL}/api/inventario/tiendas`, {
+        method: 'GET',
+        headers: getAuthHeaders(),
+      });
+      
+      if (response.status === 401 || response.status === 403) {
+        return { success: false, message: 'Sesión expirada. Por favor inicia sesión nuevamente.' };
+      }
+      
+      if (!response.ok) throw new Error(`Error: ${response.status}`);
+      return await response.json();
+    } catch (error) {
+      console.error('Error en getTiendas:', error);
+      return { success: false, message: 'Error al consultar la lista de tiendas.' };
+    }
+  },
+
+  // 🔓 OBTENER TIENDAS PARA EL HEADER (Público)
+  getTiendasPublicas: async (): Promise<ApiResponse<any[]>> => {
+    try {
+      // Usamos la nueva ruta que acabamos de crear en el backend
+      const response = await fetch(`${API_BASE_URL}/api/inventario/publicas`, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+          // Opcional: puedes inyectar el token si existe usando getToken(), 
+          // pero NO interrumpimos la petición si no lo hay.
+        },
+      });
+      
+      if (!response.ok) {
+         throw new Error(`Error HTTP al cargar tiendas: ${response.status}`);
+      }
+      
+      return await response.json();
+    } catch (error) {
+      console.error('Error en getTiendasPublicas:', error);
+      return { success: false, message: 'Fallo al conectar con el servidor de sucursales.' };
+    }
+  },
+
+  solicitarStock: async (id_producto: string, cantidad: number): Promise<ApiResponse<any>> => {
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/inventario/solicitudes`, {
+        method: 'POST',
+        headers: getAuthHeaders(),
+        body: JSON.stringify({ id_producto, cantidad })
+      });
+      return await response.json();
+    } catch (error: any) {
+      return { success: false, message: 'Error de red al solicitar stock.' };
+    }
+  },
+
+  // En src/services/api.service.ts (dentro de apiService)
+
+  // Obtener solicitudes de stock
+  getSolicitudesStock: async (): Promise<ApiResponse<any[]>> => {
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/inventario/solicitudes`, {
+        method: 'GET',
+        headers: getAuthHeaders(),
+      });
+      return await response.json();
+    } catch (error: any) {
+      return { success: false, message: 'Error de red al obtener las solicitudes.' };
+    }
+  },
+
+  // Responder a una solicitud (SuperAdmin)
+  responderSolicitudStock: async (id_solicitud: string, accion: 'APROBAR' | 'RECHAZAR'): Promise<ApiResponse<any>> => {
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/inventario/solicitudes/${id_solicitud}/responder`, {
+        method: 'PUT',
+        headers: getAuthHeaders(),
+        body: JSON.stringify({ accion })
+      });
+      return await response.json();
+    } catch (error: any) {
+      return { success: false, message: 'Error de red al responder la solicitud.' };
+    }
+  },
+
+  // En apiService dentro de ApiService.ts
+  getTiendasPaginadas: async (page = 1, search = '', region = ''): Promise<ApiResponse<any[]>> => {
+    try {
+      // Cambiamos /admin/lista por /tiendas
+      const url = `${API_BASE_URL}/api/inventario/tiendas?page=${page}&search=${encodeURIComponent(search)}&region=${encodeURIComponent(region)}`;
+      
+      const response = await fetch(url, {
+        method: 'GET',
+        headers: getAuthHeaders(),
+      });
+      
+      if (response.status === 401 || response.status === 403) {
+        return { success: false, message: 'Sesión expirada o sin permisos.' };
+      }
+      
+      if (!response.ok) {
+         throw new Error(`Error HTTP: ${response.status}`);
+      }
+      
+      return await response.json();
+    } catch (error) {
+      console.error('Error en getTiendasPaginadas:', error);
+      return { success: false, message: 'Error de conexión con el servicio de tiendas.' };
+    }
+  },
+
+ // OBTENER INVENTARIO EN RED (Paginado para el nuevo Dashboard de Inventarios)
+  getInventarioRed: async (page: number = 1, limit: number = 10, search: string = '', sort: string = 'newest'): Promise<ApiResponse<any[]>> => {
+    try {
+      if (!checkAuth()) {
+        return { success: false, message: 'No autenticado. Por favor inicia sesión.' };
+      }
+
+      // ✨ ACTUALIZADO: Añadimos el parámetro sort a la URL
+      const url = `${API_BASE_URL}/api/productos/inventario/red?page=${page}&limit=${limit}&search=${encodeURIComponent(search)}&sort=${sort}`;
+      
+      const response = await fetch(url, { method: 'GET', headers: getAuthHeaders() });
+      
+      if (response.status === 401 || response.status === 403) return { success: false, message: 'Sesión expirada.' };
+      
+      if (!response.ok) throw new Error(`Error HTTP: ${response.status}`);
+      
+      return await response.json();
+    } catch (error) {
+      console.error('Error en getInventarioRed:', error);
+      return { success: false, message: 'Error de red al obtener el inventario global.' };
     }
   },
 
@@ -223,7 +367,9 @@ export const apiService = {
     }
   },
 
-  saveProductoCompleto: async (form: any, specs: any[], images: File[]): Promise<ApiResponse<any>> => {
+  // ✨ ACTUALIZADO: Soporte para Identificador de Imagen Principal y Eliminación
+// ✨ ACTUALIZADO: Soporte total para Galería Dinámica
+  saveProductoCompleto: async (form: any, specs: any[], images: File[], mainImageId?: string, mainImageIndex?: number, imagesToDelete?: string[]): Promise<ApiResponse<any>> => {
     try {
       if (!checkAuth()) {
         return { success: false, message: 'No autenticado. Por favor inicia sesión.' };
@@ -237,19 +383,21 @@ export const apiService = {
       formData.append('descripcion', form.descripcion || '');
       formData.append('sku', form.sku || '');
       formData.append('id_categoria', form.id_categoria || ''); 
-
-      // ⚠️ CORRECCIÓN: Se eliminó el "formData.append('stock_inicial', '10');" duplicado.
-      // Aseguramos que stock_inicial viaje como string y no como número para que FormData no falle
       formData.append('stock_inicial', String(form.stock_inicial || '0')); 
 
       // 2. Especificaciones
       const validSpecs = specs.filter(s => s.clave && s.valor);
       formData.append('especificaciones', JSON.stringify(validSpecs));
 
-      // 3. Imágenes
+      // 3. Imágenes y Lógica Principal
       images.forEach((file) => {
         formData.append('imagenes', file);
       });
+
+      // Lógica de portada y borrado
+      if (mainImageId) formData.append('mainImageId', mainImageId);
+      if (mainImageIndex !== undefined && mainImageIndex !== -1) formData.append('mainImageIndex', String(mainImageIndex));
+      if (imagesToDelete && imagesToDelete.length > 0) formData.append('imagesToDelete', JSON.stringify(imagesToDelete));
 
       const isEdit = !!form.id_producto;
       const url = isEdit 
@@ -259,13 +407,11 @@ export const apiService = {
 
       const response = await fetch(url, {
         method,
-        headers: getFormDataHeaders(), // Usar headers sin Content-Type
+        headers: getFormDataHeaders(),
         body: formData
       });
 
-      if (response.status === 401 || response.status === 403) {
-        return { success: false, message: 'Sesión expirada. Por favor inicia sesión nuevamente.' };
-      }
+      if (response.status === 401 || response.status === 403) return { success: false, message: 'Sesión expirada.' };
 
       return await response.json();
     } catch (error: any) {
@@ -319,9 +465,10 @@ export const apiService = {
   // ==========================================
   // SERVICIO DE PROMOCIONES (MÓDULO ADMIN)
   // ==========================================
-  getPromocionesAdmin: async (): Promise<{success: boolean, tienda_actual?: string, data?: PromocionAdmin[], message?: string}> => {
+  getPromocionesAdmin: async (page: number = 1, limit: number = 10, search: string = '', sort: string = 'newest'): Promise<ApiResponse<PromocionAdmin[]>> => {
     try {
-      const response = await fetch(`${API_BASE_URL}/api/productos/promociones/admin`, {
+      const url = `${API_BASE_URL}/api/productos/promociones/admin?page=${page}&limit=${limit}&search=${encodeURIComponent(search)}&sort=${sort}`;
+      const response = await fetch(url, {
         method: 'GET',
         headers: getAuthHeaders(),
       });
@@ -331,12 +478,14 @@ export const apiService = {
     }
   },
 
-  guardarPromocion: async (id_producto: string, descuento: number, fecha_inicio: string, fecha_fin: string): Promise<ApiResponse<any>> => {
+  // En api.service.ts
+  guardarPromocion: async (id_producto: string, descuento: number, fecha_inicio: string, fecha_fin: string, id_tienda?: string): Promise<ApiResponse<any>> => {
     try {
       const response = await fetch(`${API_BASE_URL}/api/productos/promociones/admin/guardar`, {
         method: 'POST',
         headers: getAuthHeaders(),
-        body: JSON.stringify({ id_producto, descuento, fecha_inicio, fecha_fin })
+        // ✨ Agregamos id_tienda al body por si el SuperAdmin lo necesita
+        body: JSON.stringify({ id_producto, descuento, fecha_inicio, fecha_fin, id_tienda }) 
       });
       return await response.json();
     } catch (error: any) {
