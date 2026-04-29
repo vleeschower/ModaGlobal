@@ -343,4 +343,85 @@ export const apiService = {
       return { success: false, message: 'Error de red al guardar promoción.' };
     }
   },
+
+// SERVICIO DE CARRITO (BASE DE DATOS)
+// ==========================================
+  
+  getCarrito: async (): Promise<ApiResponse<any>> => {
+    try {
+      if (!checkAuth()) return { success: false, message: 'No autenticado.' };
+      
+      const response = await fetch(`${API_BASE_URL}/api/carrito`, {
+        method: 'GET',
+        headers: getAuthHeaders(),
+      });
+      return await response.json();
+    } catch (error: any) {
+      console.error('Error en getCarrito:', error);
+      return { success: false, message: 'Error de red al obtener el carrito.' };
+    }
+  },
+
+  upsertCarritoItem: async (id_producto: string, cantidad: number): Promise<ApiResponse<any>> => {
+    try {
+      if (!checkAuth()) return { success: false, message: 'No autenticado.' };
+      
+      const response = await fetch(`${API_BASE_URL}/api/carrito/item`, {
+        method: 'POST',
+        headers: getAuthHeaders(),
+        body: JSON.stringify({ id_producto, cantidad })
+      });
+      return await response.json();
+    } catch (error: any) {
+      console.error('Error en upsertCarritoItem:', error);
+      return { success: false, message: 'Error al actualizar producto en el carrito.' };
+    }
+  },
+
+  syncCarrito: async (items: any[]): Promise<ApiResponse<any>> => {
+    try {
+      if (!checkAuth()) return { success: false, message: 'No autenticado.' };
+      
+      const response = await fetch(`${API_BASE_URL}/api/carrito/sync`, {
+        method: 'POST',
+        headers: getAuthHeaders(),
+        // Enviamos el arreglo completo que estaba guardado en LocalStorage
+        body: JSON.stringify({ items }) 
+      });
+      return await response.json();
+    } catch (error: any) {
+      console.error('Error en syncCarrito:', error);
+      return { success: false, message: 'Error al sincronizar el carrito con la nube.' };
+    }
+  },
+
+  removeFromCarrito: async (id_producto: string): Promise<ApiResponse<any>> => {
+    try {
+      if (!checkAuth()) return { success: false, message: 'No autenticado.' };
+      
+      const response = await fetch(`${API_BASE_URL}/api/carrito/item/${id_producto}`, {
+        method: 'DELETE',
+        headers: getAuthHeaders(),
+      });
+      return await response.json();
+    } catch (error: any) {
+      console.error('Error en removeFromCarrito:', error);
+      return { success: false, message: 'Error al eliminar producto del carrito.' };
+    }
+  },
+
+  clearCarritoDB: async (): Promise<ApiResponse<any>> => {
+    try {
+      if (!checkAuth()) return { success: false, message: 'No autenticado.' };
+      
+      const response = await fetch(`${API_BASE_URL}/api/carrito`, {
+        method: 'DELETE',
+        headers: getAuthHeaders(),
+      });
+      return await response.json();
+    } catch (error: any) {
+      console.error('Error en clearCarritoDB:', error);
+      return { success: false, message: 'Error al vaciar el carrito en la nube.' };
+    }
+  }
 };

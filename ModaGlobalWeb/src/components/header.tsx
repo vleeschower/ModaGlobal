@@ -17,7 +17,7 @@ const Header: React.FC<HeaderProps> = ({ toggleSidebar }) => {
   const { totalItems } = useCart(); // <-- Sacamos el total de items del carrito
 
   const navLinks = [
-    { name: 'Ropa', href: '/catalogo' }, // Actualicé a /catalogo para que no sea un link muerto #
+    { name: 'Catalogo', href: '/catalogo' }, // Actualicé a /catalogo para que no sea un link muerto #
     { name: 'Tecnología', href: '/catalogo' },
     { name: 'Accesorios', href: '/catalogo' },
     { name: 'Ofertas', href: '/home' },

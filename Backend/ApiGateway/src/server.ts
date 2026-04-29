@@ -67,9 +67,15 @@ const usuarioProxyOptions: Options = {
 };
 
 const ventaProxyOptions: Options = {
-    target: 'http://localhost:3004',
+    target: 'http://localhost:3003',
     changeOrigin: true,
     pathRewrite: { '^/api/ventas': '' },
+    on: { proxyReq: (proxyReq, req, _res) => configurarHeadersSeguridad(proxyReq as ClientRequest, req as AuthRequest) }
+};
+
+const carritoProxyOptions: Options = {
+    target: 'http://localhost:3003',
+    changeOrigin: true,
     on: { proxyReq: (proxyReq, req, _res) => configurarHeadersSeguridad(proxyReq as ClientRequest, req as AuthRequest) }
 };
 
@@ -82,18 +88,24 @@ app.post('/api/usuarios/login', limitadorSeguridad, createProxyMiddleware(usuari
 app.post('/api/usuarios/register', limitadorSeguridad, createProxyMiddleware(usuarioProxyOptions));
 
 // B. Rate Limits para Mutaciones (Protección contra SPAM)
-app.post('/api/productos/admin/producto/nuevo', limitadorSeguridad); // <-- Actualizado
-app.put('/api/productos/admin/producto/editar/:id', limitadorSeguridad); // <-- Actualizado
+app.post('/api/productos/admin/producto/nuevo', limitadorSeguridad); 
+app.put('/api/productos/admin/producto/editar/:id', limitadorSeguridad); 
 app.post('/api/productos/promociones', limitadorSeguridad);
 app.post('/api/productos/proveedores/vincular', limitadorSeguridad);
 app.post('/api/productos/resenas', limitadorSeguridad);
 app.delete('/api/productos/:id', limitadorSeguridad);
+
+// 👇 NUEVO: Rate limits para el carrito para que no te saturen la BD dándole mil clics al botón
+app.post('/api/carrito/item', limitadorSeguridad);
+app.post('/api/carrito/sync', limitadorSeguridad);
 
 // C. ENRUTADOR MAESTRO OMNICANAL
 app.use('/api/usuarios', validarAccesoGoblal, createProxyMiddleware(usuarioProxyOptions));
 app.use('/api/venta', validarAccesoGoblal, createProxyMiddleware(ventaProxyOptions));
 app.use('/api/productos', validarAccesoGoblal, createProxyMiddleware(productoProxyOptions));
 
+// 👇 NUEVO: Ruta principal del carrito
+app.use('/api/carrito', validarAccesoGoblal, createProxyMiddleware(carritoProxyOptions));
 // ==========================================================
 // 4. INICIO DEL SERVIDOR
 // ==========================================================
