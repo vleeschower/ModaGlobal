@@ -5,11 +5,13 @@ import { type Producto } from '../types/Producto';
 import Header from '../components/header';
 import Footer from '../components/footer';
 import ProductCard from '../components/ProductCard';
-import { useAuth } from '../context/AuthContext'; // <-- AÑADIDO: Necesario para extraer los roles
+import { useAuth } from '../context/AuthContext'; 
+import { useCart } from '../context/CartContext'; // <-- Lógica del carrito (De Rogelio)
 
 const ProductDetails: React.FC = () => {
   const { id } = useParams<{ id: string }>();
-  const { isSuperAdmin } = useAuth(); // Sacamos el rol
+  const { isSuperAdmin } = useAuth(); 
+  const { addToCart } = useCart(); // <-- Función del carrito (De Rogelio)
 
   const [product, setProduct] = useState<Producto | null>(null);
   const [related, setRelated] = useState<Producto[]>([]);
@@ -23,14 +25,11 @@ const ProductDetails: React.FC = () => {
   const [newReviewText, setNewReviewText] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [reviewMessage, setReviewMessage] = useState<{type: 'error', text: string} | null>(null);
-  
-  // ✨ NUEVO ESTADO: Controla la visibilidad del Modal de Éxito
   const [showSuccessModal, setShowSuccessModal] = useState(false);
 
-  // ✨ MEJORA: Agregamos el parámetro 'showSpinner' para recargas silenciosas
   const loadData = async (showSpinner = true) => {
     if (!id) return;
-    if (showSpinner) setLoading(true); // Solo mostramos la pantalla de carga si es necesario
+    if (showSpinner) setLoading(true); 
     
     const res = await apiService.getProductoById(id);
     
@@ -47,7 +46,7 @@ const ProductDetails: React.FC = () => {
   };
 
   useEffect(() => {
-    loadData(true); // Al entrar a la página por primera vez, SÍ queremos el spinner
+    loadData(true); 
     window.scrollTo(0, 0);
   }, [id]);
 
@@ -65,21 +64,18 @@ const ProductDetails: React.FC = () => {
     const res = await apiService.crearResena(id, newReviewRating, newReviewText);
     
     if (res.success) {
-        // ✨ MAGIA UX: Limpiamos el formulario, mostramos el modal y recargamos los datos en silencio
         setNewReviewText('');
         setNewReviewRating(0);
         setShowSuccessModal(true); 
-        loadData(false); // <-- false = Recarga Silenciosa de las estrellas y los comentarios
+        loadData(false); 
     } else {
         setReviewMessage({ type: 'error', text: res.message || 'Error al publicar la reseña.' });
     }
     setIsSubmitting(false);
   };
 
-  // Función base para que el botón de Admin no rompa la app
   const handleEliminarResena = async (id_resena: any) => {
       if(window.confirm('¿Estás seguro de que deseas eliminar esta reseña?')) {
-          // TODO: Conectar con tu apiService.eliminarResena cuando exista
           console.log('Eliminar reseña:', id_resena);
           alert('Función de eliminar reseña en desarrollo');
       }
@@ -109,7 +105,6 @@ const ProductDetails: React.FC = () => {
       <Header />
       
       <main className="grow max-w-1440px mx-auto w-full px-6 md:px-16 py-8">
-        {/* NAVEGACIÓN Y BOTÓN ADMIN DE EDICIÓN RÁPIDA (Unificados) */}
         <div className="flex justify-between items-center mb-8">
             <nav className="flex items-center gap-2 text-sm text-gray-400">
                 <Link to="/" className="hover:text-emerald-500 transition-colors">Inicio</Link> 
@@ -229,8 +224,15 @@ const ProductDetails: React.FC = () => {
                         {/* Evitamos que el usuario pida más del stock físico que hay en tienda */}
                         <button onClick={() => setQuantity(q => Math.min(product.stock_local || 1, q+1))} className="px-5 h-full hover:bg-gray-200 transition-colors font-bold">+</button>
                       </div>
-                      <button className="flex-1 h-14 bg-slate-900 text-white rounded-2xl font-bold hover:bg-emerald-500 transition-all shadow-xl shadow-slate-900/10 flex items-center justify-center gap-3 active:scale-95">
-                        <span className="material-symbols-outlined">shopping_cart</span>
+                      
+                      {/* ✨ BOTÓN DE ROGELIO CON TU ESTILO */}
+                      <button 
+                        onClick={() => addToCart(product, quantity)}
+                        className="flex-1 h-14 bg-slate-900 text-white rounded-2xl font-bold hover:bg-emerald-500 transition-all shadow-xl shadow-slate-900/10 flex items-center justify-center gap-3 active:scale-95"
+                      >
+                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-5 h-5">
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 3h1.386c.51 0 .955.343 1.087.835l.383 1.437M7.5 14.25a3 3 0 0 0-3 3h15.75m-12.75-3h11.218c1.121-2.3 2.1-4.684 2.924-7.138a60.114 60.114 0 0 0-16.536-1.84M7.5 14.25 5.106 5.272M6 20.25a.75.75 0 1 1-1.5 0 .75.75 0 0 1 1.5 0Zm12.75 0a.75.75 0 1 1-1.5 0 .75.75 0 0 1 1.5 0Z" />
+                        </svg>
                         Añadir al carrito
                       </button>
                   </div>
@@ -295,14 +297,12 @@ const ProductDetails: React.FC = () => {
                                 <div key={resena.id_resena} className="p-6 bg-white border border-gray-100 rounded-2xl shadow-sm">
                                     <div className="flex items-center justify-between mb-3">
                                         <div className="flex items-center gap-3">
-                                          {/* ✨ Usamos el snapshot para las iniciales */}
                                           <div className="w-10 h-10 bg-slate-900 text-white rounded-full flex items-center justify-center font-bold uppercase">
                                               {resena.nombre_usuario_snapshot 
                                                   ? resena.nombre_usuario_snapshot.substring(0, 2) 
                                                   : resena.id_usuario.substring(0, 2)}
                                           </div>
                                           <div>
-                                              {/* ✨ Mostramos el snapshot como nombre principal */}
                                               <p className="font-bold text-slate-900 text-sm">
                                                   {resena.nombre_usuario_snapshot || ''}
                                               </p>
@@ -315,7 +315,6 @@ const ProductDetails: React.FC = () => {
                                     </div>
                                     <p className="text-gray-600 text-sm leading-relaxed">{resena.comentario}</p>
                                     
-                                    {/* ✨ BOTÓN ADMIN: ELIMINAR RESEÑA */}
                                     {isSuperAdmin && (
                                         <div className="mt-4 pt-3 border-t border-red-50 flex justify-end">
                                             <button onClick={() => handleEliminarResena(resena.id_resena)} className="text-xs text-red-500 font-bold hover:underline">

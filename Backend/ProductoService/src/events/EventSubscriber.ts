@@ -115,12 +115,12 @@ export const iniciarEscuchaEventos = async () => {
                 return;
             }
 
-            // -------------------------------------------------------------
+// -------------------------------------------------------------
             // ESCENARIO 2: EVENTO SIMPLE (Mermas, Ajustes normales)
             // -------------------------------------------------------------
             if (metadata.evento === 'STOCK_ACTUALIZADO') {
                 const { id_inventario, id_tienda, id_producto, stock_disponible, stock_reservado } = payload;
-                console.log(`📥 [EVENTO SIMPLE] Stock Actualizado recibido para tienda: ${id_tienda}`);
+                console.log(`📥 [EVENTO SIMPLE] Actualizando Réplica | Tienda: ${id_tienda} | Disp: ${stock_disponible}`);
 
                 const pool = await getConnection();
                 const id_replica = `rep-${id_inventario.replace('inv-', '')}`;
@@ -158,7 +158,7 @@ export const iniciarEscuchaEventos = async () => {
                         END CATCH
                     `);
 
-                logger.info(`✅ Réplica de stock sincronizada: Prod ${id_producto} | Tienda ${id_tienda} | Disp: ${stock_disponible}`);
+                logger.info(`✅ Réplica sincronizada en Productos: Prod ${id_producto} | Tienda ${id_tienda} | Stock: ${stock_disponible}`);
                 await receiver.completeMessage(mensajeRecibido);
                 return;
             }
@@ -167,7 +167,7 @@ export const iniciarEscuchaEventos = async () => {
             await receiver.completeMessage(mensajeRecibido);
 
         } catch (error) {
-            logger.error(`❌ Error procesando evento:`, error);
+            logger.error(`❌ Error procesando evento en BD de Productos:`, error);
             try {
                 await receiver.deadLetterMessage(mensajeRecibido, {
                     deadLetterReason: "ErrorProcesamientoBD",
@@ -178,7 +178,7 @@ export const iniciarEscuchaEventos = async () => {
     };
 
     const procesarError = async (errorInfo: any) => {
-        logger.error(`Error en la conexión con Service Bus: ${errorInfo.error}`);
+        logger.error(`❌ Error en la red de Service Bus: ${errorInfo.error}`);
     };
 
     receiver.subscribe({

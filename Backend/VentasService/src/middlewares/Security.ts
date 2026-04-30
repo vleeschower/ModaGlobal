@@ -15,13 +15,23 @@ export const verificarAccesoInterno = (req: CustomRequest, res: Response, next: 
     const userRol = req.headers['x-user-rol'] as string;
     const tiendaId = req.headers['x-user-tienda-id'] as string;
 
-    // 1. Validar que la petición venga del Gateway (Zero Trust)
-    if (!apiKey || apiKey !== process.env.INTERNAL_API_KEY) {
+    // ====== EL DETECTOR DE CHISMES ======
+    console.log("\n====== DEBUG DEL GATEWAY ======");
+    console.log("Llave recibida:", apiKey);
+    console.log("ID de Usuario:", userId);
+    console.log("Rol de Usuario:", userRol);
+    console.log("===============================\n");
+
+    // 1. EL GUARDIA DE LA LLAVE (Con plan de rescate por si el .env falla)
+    const llaveMaestra = process.env.INTERNAL_API_KEY || 'clave-secreta-interna-modaglobal';
+
+    if (!apiKey || apiKey !== llaveMaestra) {
         logger.error(`BLOQUEO: Intento de bypass de Gateway desde IP: ${req.ip}`);
         res.status(403).json({ error: 'Acceso denegado. Use el API Gateway.' });
         return;
     }
 
+    // 2. EL GUARDIA DE IDENTIDAD (El que te está dando el 401 si no te logueas)
     if (!userId || !userRol) {
         logger.error(`BLOQUEO: Petición sin identidad de usuario o rol.`);
         res.status(401).json({ error: 'Identidad o rol de usuario no proporcionados.' });

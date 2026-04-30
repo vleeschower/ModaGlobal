@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 # Dependencias
 node_modules/
 
@@ -31,3 +32,6 @@ lerna-debug.log*
 *.njsproj
 *.sln
 *.sw?
+=======
+node_modules/
+>>>>>>> origin/Rogelio

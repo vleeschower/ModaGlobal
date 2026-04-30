@@ -8,6 +8,7 @@ import { publicarEvento } from '../events/EventPublisher';
 // Función utilitaria para crear pausas estratégicas en milisegundos
 const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
+
 // ==========================================
 // MÓDULO: TIENDAS / ALMACENES
 // ==========================================
@@ -87,7 +88,6 @@ export const consultarStock = async (req: Request, res: Response): Promise<void>
 export const ajustarStock = async (req: any, res: Response): Promise<void> => {
     try {
         const { id_producto, cantidad, tipo_movimiento, id_referencia } = req.body;
-        
         const idUsuarioReal = req.usuarioTransaccion; 
         const rolUsuario = req.usuarioRol;
 
@@ -108,8 +108,8 @@ export const ajustarStock = async (req: any, res: Response): Promise<void> => {
         const refLimpia = xss(id_referencia || 'AJUSTE_MANUAL');
         const pool = await getConnection();
         const idMovimiento = `mov-${uuidv4().substring(0,8)}`;
-
-        // 👇 2. GUARDAMOS EL RESULTADO EN UNA VARIABLE
+        const idAuditoria = `aud-${uuidv4().substring(0,8)}`;
+        
         const result = await pool.request()
             .input('id_movimiento', idMovimiento)
             .input('id_tienda', id_tienda)
@@ -118,15 +118,17 @@ export const ajustarStock = async (req: any, res: Response): Promise<void> => {
             .input('tipo_movimiento', tipo_movimiento)
             .input('id_referencia', refLimpia)
             .input('id_usuario', idUsuarioReal)
-            .input('ip_origen', req.ip || '127.0.0.1') // ✨ NUEVO: Capturamos la IP
+            .input('ip_origen', req.ip || '127.0.0.1')
             .query(`
+                SET NOCOUNT ON; -- ✨ CRÍTICO: Evita que SQL oculte la respuesta del SELECT
+                
                 BEGIN TRY
                     BEGIN TRANSACTION;
 
                     DECLARE @id_inventario VARCHAR(50);
                     DECLARE @stock_actual INT;
                     DECLARE @stock_reservado_actual INT = 0; 
-
+                    
                     SELECT @id_inventario = id_inventario, @stock_actual = stock_disponible, @stock_reservado_actual = stock_reservado
                     FROM dbo.inventarios WITH (UPDLOCK)
                     WHERE id_tienda = @id_tienda AND id_producto = @id_producto;
@@ -137,58 +139,66 @@ export const ajustarStock = async (req: any, res: Response): Promise<void> => {
                         BEGIN
                             THROW 50001, 'No hay stock. El producto nunca ha ingresado a esta tienda.', 1;
                         END
-
                         SET @id_inventario = 'inv-' + LEFT(NEWID(), 8);
                         INSERT INTO dbo.inventarios (id_inventario, id_tienda, id_producto, stock_disponible, stock_reservado)
                         VALUES (@id_inventario, @id_tienda, @id_producto, 0, 0);
-                        
                         SET @stock_actual = 0;
                     END
-
+                    
                     IF (@stock_actual + @cantidad < 0)
                     BEGIN
                         THROW 50001, 'Stock insuficiente para procesar la salida/merma solicitada.', 1;
                     END
-
+                    
                     UPDATE dbo.inventarios 
                     SET stock_disponible = stock_disponible + @cantidad, updated_at = SYSUTCDATETIME()
                     WHERE id_inventario = @id_inventario;
-
+                    
                     INSERT INTO dbo.movimientos_inventario (id_movimiento, id_inventario, tipo_movimiento, cantidad, id_referencia, created_by)
                     VALUES (@id_movimiento, @id_inventario, @tipo_movimiento, @cantidad, @id_referencia, @id_usuario);
 
-                    -- ✨ NUEVO: Registro forense en auditoría
                     DECLARE @id_auditoria VARCHAR(50) = 'aud-' + LEFT(NEWID(), 8);
                     INSERT INTO dbo.auditoria_inventarios (id_auditoria, id_usuario, tabla_afectada, id_registro_afectado, accion, valores_nuevos, ip_origen)
                     VALUES (@id_auditoria, @id_usuario, 'inventarios', @id_inventario, @tipo_movimiento, JSON_MODIFY('{}', '$.cantidad_afectada', @cantidad), @ip_origen);
 
-                    -- 👇 3. MAGIA: DEVOLVEMOS EL STOCK FINAL
+                    -- Devolvemos los datos recién calculados a Node.js
                     SELECT 
                         @id_inventario AS id_inventario_final, 
                         (@stock_actual + @cantidad) AS stock_disponible_final,
                         @stock_reservado_actual AS stock_reservado_final;
-
+                        
                     COMMIT TRANSACTION;
                 END TRY
                 BEGIN CATCH
                     IF @@TRANCOUNT > 0
                         ROLLBACK TRANSACTION;
+
                     THROW;
                 END CATCH
             `);
+            
+        // ✨ CORRECCIÓN DE TYPESCRIPT: Forzamos el tipo a un arreglo de arreglos
+        const arreglosDeResultados = result.recordsets as any[][];
+        const datosFinales = arreglosDeResultados.find(rs => rs && rs.length > 0)?.[0];
+        
+        console.log(`📦 [INVENTARIO SQL] Resultado del ajuste:`, datosFinales);
 
-        // 👇 4. PUBLICAMOS EL EVENTO CON LOS DATOS REALES DE SQL
-        const datosFinales = result.recordset[0];
+        if (!datosFinales || !datosFinales.id_inventario_final) {
+            logger.warn("⚠️ ALERTA: SQL no devolvió el ID del inventario. El evento no se enviará.");
+        } else {
+            // =========================================================================
+            // ✨ EVENTO SIMPLE: Modificaste UNA tienda, mandas evento de UNA tienda
+            // =========================================================================
+            await publicarEvento('STOCK_ACTUALIZADO', {
+                id_inventario: datosFinales.id_inventario_final,
+                id_tienda: id_tienda,
+                id_producto: id_producto,
+                stock_disponible: datosFinales.stock_disponible_final,
+                stock_reservado: datosFinales.stock_reservado_final
+            });
+        }
 
-        await publicarEvento('STOCK_ACTUALIZADO', {
-            id_inventario: datosFinales.id_inventario_final,
-            id_tienda: id_tienda,
-            id_producto: id_producto,
-            stock_disponible: datosFinales.stock_disponible_final,
-            stock_reservado: datosFinales.stock_reservado_final
-        });
-
-        res.status(200).json({ success: true, message: 'Inventario actualizado correctamente y evento propagado.' });
+        res.status(200).json({ success: true, message: 'Inventario actualizado correctamente.' });
 
     } catch (error: any) {
         if (error.number === 50001) {

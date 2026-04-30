@@ -15,5 +15,6 @@ app.listen(PORT, async () => {
     logger.info('Iniciando prueba de conexión a Azure...');
     await probarConexion();
 
+
     iniciarEscuchaEventos();
 });

@@ -34,6 +34,8 @@ export interface Producto {
   sku?: string;
   imagen_url?: string;
   nombre_categoria?: string;
+  tiene_stock: boolean;
+  stock_inicial?: number; // Nuevo campo para el stock inicial al crear un producto
   
   // -- CAMPOS DEL BACKEND --
   galeria?: ImagenProducto[];

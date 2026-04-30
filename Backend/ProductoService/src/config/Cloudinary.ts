@@ -13,11 +13,13 @@ cloudinary.config({
 const storage = new CloudinaryStorage({
     cloudinary: cloudinary,
     params: async (req, file) => {
+        // ✨ Añadimos un Math.random() para garantizar que el ID sea 100% único
+        const randomSuffix = Math.round(Math.random() * 100000);
         return {
-            
-        allowed_formats: ['jpg', 'png', 'webp', 'jpeg'], // Solo formatos visuales
-        transformation: [{ width: 800, height: 800, crop: 'limit' }], // Redimensionar para ahorrar espacio
-        public_id: `prod-${Date.now()}` // Nombre único para evitar sobreescritura
+            folder: 'modaglobal', // (Opcional) Puedes crear una carpeta en tu cloudinary
+            allowed_formats: ['jpg', 'png', 'webp', 'jpeg'],
+            transformation: [{ width: 800, height: 800, crop: 'limit' }], 
+            public_id: `prod-${Date.now()}-${randomSuffix}` // <-- LA CORRECCIÓN CLAVE
         };
     },
 });

@@ -59,8 +59,8 @@ router.post('/promociones', verificarRol(['Administrador', 'SuperAdministrador']
 router.post('/proveedores/vincular', verificarRol(['Administrador', 'SuperAdministrador']), vincularProveedor);
 
 // Operaciones Maestras de Catálogo
-router.post('/nuevo', verificarRol(['SuperAdministrador']), upload.array('imagenes', 5), crearProducto);
-router.put('/:id', verificarRol(['SuperAdministrador']), upload.array('imagenes', 5), actualizarProducto);
+router.post('/admin/producto/nuevo', verificarRol(['SuperAdministrador']), upload.array('imagenes', 5), crearProducto);
+router.put('/admin/producto/editar/:id', verificarRol(['SuperAdministrador']), upload.array('imagenes', 5), actualizarProducto);
 router.delete('/:id', verificarRol(['SuperAdministrador']), eliminarProducto);
 
 export default router;

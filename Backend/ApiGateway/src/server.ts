@@ -3,16 +3,14 @@ import cors from 'cors';
 import { createProxyMiddleware, Options } from 'http-proxy-middleware';
 import rateLimit from 'express-rate-limit';
 import dotenv from 'dotenv';
-import { ClientRequest } from 'http';
+import { ClientRequest } from 'http'; 
+
 import { validarAccesoGoblal, AuthRequest } from './middlewares/AuthMiddleware';
 
 dotenv.config();
 
 const app: Application = express();
 const PORT: number | string = process.env.PORT || 3000;
-
-// 👇 CAMBIO 1: Agrega esto para que el limitador de peticiones lea la IP real del usuario y no la de tu balanceador de GCP/Azure.
-app.set('trust proxy', 1); 
 
 app.use(cors());
 
@@ -23,16 +21,8 @@ const configurarHeadersSeguridad = (proxyReq: ClientRequest, req: AuthRequest) =
     const internalKey = process.env.INTERNAL_API_KEY || 'clave-secreta-interna-modaglobal';
     proxyReq.setHeader('x-api-key', internalKey);
 
-    // 👇 CAMBIO 2: Purgar headers maliciosos antes de inyectar los reales.
-    // Esto evita que un invitado falsifique ser administrador.
-    proxyReq.removeHeader('x-user-id');
-    proxyReq.removeHeader('x-user-name');
-    proxyReq.removeHeader('x-user-rol');
-    proxyReq.removeHeader('x-user-tienda-id');
-
     if (req.user) {
         proxyReq.setHeader('x-user-id', req.user.id);
-        proxyReq.setHeader('x-user-name', encodeURIComponent(req.user.nombre));
         proxyReq.setHeader('x-user-rol', req.user.rol);
         if (req.user.tienda_id) {
             proxyReq.setHeader('x-user-tienda-id', req.user.tienda_id);
@@ -70,16 +60,22 @@ const productoProxyOptions: Options = {
 };
 
 const usuarioProxyOptions: Options = {
-    target: 'http://localhost:3003',
+    target: 'http://localhost:3022',
     changeOrigin: true,
     pathRewrite: { '^/api/usuarios': '' },
     on: { proxyReq: (proxyReq, req, _res) => configurarHeadersSeguridad(proxyReq as ClientRequest, req as AuthRequest) }
 };
 
 const ventaProxyOptions: Options = {
-    target: 'http://localhost:3004',
+    target: 'http://localhost:3003',
     changeOrigin: true,
     pathRewrite: { '^/api/ventas': '' },
+    on: { proxyReq: (proxyReq, req, _res) => configurarHeadersSeguridad(proxyReq as ClientRequest, req as AuthRequest) }
+};
+
+const carritoProxyOptions: Options = {
+    target: 'http://localhost:3003',
+    changeOrigin: true,
     on: { proxyReq: (proxyReq, req, _res) => configurarHeadersSeguridad(proxyReq as ClientRequest, req as AuthRequest) }
 };
 
@@ -92,18 +88,25 @@ app.post('/api/usuarios/login', limitadorSeguridad, createProxyMiddleware(usuari
 app.post('/api/usuarios/register', limitadorSeguridad, createProxyMiddleware(usuarioProxyOptions));
 
 // B. Rate Limits para Mutaciones (Protección contra SPAM)
-app.post('/api/productos/nuevo', limitadorSeguridad);
+app.post('/api/productos/admin/producto/nuevo', limitadorSeguridad); 
+app.put('/api/productos/admin/producto/editar/:id', limitadorSeguridad); 
 app.post('/api/productos/promociones', limitadorSeguridad);
 app.post('/api/productos/proveedores/vincular', limitadorSeguridad);
 app.post('/api/productos/resenas', limitadorSeguridad);
 app.delete('/api/productos/:id', limitadorSeguridad);
 
+// // 👇 NUEVO: Rate limits para el carrito para que no te saturen la BD dándole mil clics al botón
+// app.post('/api/carrito/item', limitadorSeguridad);
+// app.post('/api/carrito/sync', limitadorSeguridad);
+app.use('/api/carrito', limitadorSeguridad, validarAccesoGoblal, createProxyMiddleware(carritoProxyOptions));
+
 // C. ENRUTADOR MAESTRO OMNICANAL
 app.use('/api/usuarios', validarAccesoGoblal, createProxyMiddleware(usuarioProxyOptions));
-app.use('/api/ventas', validarAccesoGoblal, createProxyMiddleware(ventaProxyOptions));
+app.use('/api/venta', validarAccesoGoblal, createProxyMiddleware(ventaProxyOptions));
 app.use('/api/productos', validarAccesoGoblal, createProxyMiddleware(productoProxyOptions));
-app.use('/api/inventario', validarAccesoGoblal, createProxyMiddleware(inventarioProxyOptions)); // ← AGREGA ESTA
 
+// 👇 NUEVO: Ruta principal del carrito
+app.use('/api/carrito', validarAccesoGoblal, createProxyMiddleware(carritoProxyOptions));
 // ==========================================================
 // 4. INICIO DEL SERVIDOR
 // ==========================================================

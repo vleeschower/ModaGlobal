@@ -1,9 +1,10 @@
 import React, { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom'; 
 import { useAuth } from '../context/AuthContext';
-import { apiService } from '../services/ApiService'; // ✨ Importamos el API
+import { apiService } from '../services/ApiService';
 import Swal from 'sweetalert2';
 import logoImg from '../assets/logom.png';
+import { useCart } from '../context/CartContext'; // <-- Lógica del carrito de Rogelio
 
 interface HeaderProps {
   toggleSidebar?: () => void;
@@ -14,13 +15,14 @@ const Header: React.FC<HeaderProps> = ({ toggleSidebar }) => {
   const navigate = useNavigate();
   const [isOpen, setIsOpen] = useState(false);
   const [isProfileOpen, setIsProfileOpen] = useState(false);
+  
+  // <-- Sacamos el total de items del carrito (De Rogelio)
+  const { totalItems } = useCart(); 
 
-  // ✨ NUEVO ESTADO: Controla el menú desplegable de sucursales
+  // ✨ NUEVO ESTADO: Controla el menú desplegable de sucursales (Tuyo)
   const [isStoreDropdownOpen, setIsStoreDropdownOpen] = useState(false);
   const [tiendas, setTiendas] = useState<any[]>([]);
   const [tiendaActual, setTiendaActual] = useState(localStorage.getItem('mg_tienda_seleccionada') || 'tnd-matriz');
-
-
 
   const navLinks = [
     { name: 'Catálogo', href: '/catalogo' },
@@ -40,7 +42,7 @@ const Header: React.FC<HeaderProps> = ({ toggleSidebar }) => {
     fetchTiendas();
   }, []);
 
-    // ✨ FUNCIÓN ACTUALIZADA: Ahora recibe un string directamente
+  // ✨ FUNCIÓN ACTUALIZADA: Ahora recibe un string directamente
   const handleCambioTienda = (idTienda: string) => {
     localStorage.setItem('mg_tienda_seleccionada', idTienda);
     setTiendaActual(idTienda);
@@ -91,16 +93,20 @@ const Header: React.FC<HeaderProps> = ({ toggleSidebar }) => {
           </Link>
         </div>
 
-        {/* NAVEGACIÓN DESKTOP */}
-        <div className="hidden lg:flex items-center gap-4 xl:gap-6 font-headline text-sm tracking-wide">
+        {/* NAVEGACIÓN DESKTOP (Integrado lo de Rogelio con Link) */}
+        <div className="hidden lg:flex items-center gap-6 font-headline text-sm tracking-wide">
           {navLinks.map((link) => (
-            <a key={link.name} className="text-gray-300 hover:text-primary-esmeralda transition-colors whitespace-nowrap" href={link.href}>
+            <Link 
+              key={link.name}
+              className="text-gray-300 hover:text-primary-esmeralda transition-colors whitespace-nowrap" 
+              to={link.href}
+            >
               {link.name}
-            </a>
+            </Link>
           ))}
         </div>
 
-        {/* ✨ ZONA CENTRAL: SELECTOR DE TIENDA Y BUSCADOR MÁS PEQUEÑO */}
+        {/* ✨ ZONA CENTRAL: SELECTOR DE TIENDA Y BUSCADOR MÁS PEQUEÑO (Tuyo) */}
         <div className="hidden md:flex flex-1 items-center justify-end gap-3 max-w-2xl">
           
           {/* Selector Omnicanal Customizado */}
@@ -173,19 +179,31 @@ const Header: React.FC<HeaderProps> = ({ toggleSidebar }) => {
           </div>
         </div>
 
-        {/* ICONOS DE USUARIO Y CARRITO */}
-        <div className="flex items-center gap-1 md:gap-2 text-white shrink-0">
-          <button className="p-2 hover:bg-white/10 hover:text-primary-esmeralda rounded-full transition-all active:scale-90 relative">
+        {/* ACCIONES (CARRITO Y PERFIL) */}
+        <div className="flex items-center gap-1 md:gap-4 text-white shrink-0">
+          
+          {/* BOTÓN DEL CARRITO CON NOTIFICACIÓN (De Rogelio) */}
+          <Link 
+            to="/carrito" 
+            className="p-2 hover:bg-white/10 hover:text-primary-esmeralda rounded-full transition-all active:scale-90 relative flex items-center justify-center"
+          >
             <span className="material-symbols-outlined text-2xl">shopping_cart</span>
-          </button>
+            {totalItems > 0 && (
+              <span className="absolute top-0 right-0 bg-red-500 text-white text-[10px] font-bold w-4 h-4 flex items-center justify-center rounded-full shadow-sm">
+                {totalItems}
+              </span>
+            )}
+          </Link>
 
-          {/* Perfil dropdown */}
+          {/* PERFIL / LOGIN */}
           <div className="relative">
             {isAuthenticated ? (
               <>
                 <button onClick={() => setIsProfileOpen(!isProfileOpen)} className="p-2 hover:bg-white/10 hover:text-primary-esmeralda rounded-full transition-all active:scale-90 flex items-center justify-center">
                   <span className="material-symbols-outlined text-2xl">person</span>
                 </button>
+
+                {/* Dropdown del perfil */}
                 {isProfileOpen && (
                   <div className="absolute right-0 mt-2 w-48 bg-white rounded-lg shadow-lg py-1 z-50 border border-gray-100">
                     <div className="px-4 py-2 border-b border-gray-100">
@@ -220,7 +238,7 @@ const Header: React.FC<HeaderProps> = ({ toggleSidebar }) => {
       <div className={`lg:hidden overflow-hidden transition-all duration-300 ease-in-out bg-primary ${isOpen ? 'max-h-800px border-t border-white/10' : 'max-h-0'}`}>
         <div className="flex flex-col p-6 gap-6">
           
-          {/* Selector de Tienda Móvil Customizado */}
+          {/* Selector de Tienda Móvil Customizado (Tuyo) */}
           <div className="md:hidden relative z-50">
             <p className="text-gray-400 text-xs font-bold uppercase tracking-wider mb-2">Tu Sucursal</p>
             
@@ -245,7 +263,6 @@ const Header: React.FC<HeaderProps> = ({ toggleSidebar }) => {
                     onClick={() => {
                       handleCambioTienda(t.id_tienda);
                       setIsStoreDropdownOpen(false);
-                      // Opcional: setIsOpen(false) si quieres que se cierre todo el menú móvil al elegir
                     }}
                     className={`w-full text-left px-4 py-3 text-sm transition-colors flex items-center justify-between ${
                       tiendaActual === t.id_tienda 
@@ -261,14 +278,24 @@ const Header: React.FC<HeaderProps> = ({ toggleSidebar }) => {
             )}
           </div>
 
+          {/* Buscador Móvil (Tuyo / Rogelio) */}
           <div className="md:hidden relative">
             <span className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-gray-400">search</span>
-            <input className="w-full bg-white/10 border border-white/10 rounded-xl py-3 pl-10 pr-4 text-white placeholder:text-gray-400 text-sm outline-none focus:border-primary-esmeralda transition-colors" placeholder="Buscar productos..." type="text" />
+            <input 
+              className="w-full bg-white/10 border border-white/10 rounded-xl py-3 pl-10 pr-4 text-white placeholder:text-gray-400 text-sm outline-none focus:border-primary-esmeralda transition-colors" 
+              placeholder="¿Qué estás buscando?" 
+              type="text" 
+            />
           </div>
 
           <div className="flex flex-col gap-4 mt-2">
             {navLinks.map((link) => (
-              <Link key={link.name} to={link.href} onClick={() => setIsOpen(false)} className="text-gray-300 text-lg font-medium hover:text-primary-esmeralda transition-colors py-2 border-b border-white/5">
+              <Link 
+                key={link.name} 
+                to={link.href} 
+                onClick={() => setIsOpen(false)} 
+                className="text-gray-300 text-lg font-medium hover:text-primary-esmeralda transition-colors py-2 border-b border-white/5"
+              >
                 {link.name}
               </Link>
             ))}

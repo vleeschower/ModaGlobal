@@ -31,6 +31,7 @@ router.get('/stock/:id_producto', consultarStock);
 // ==========================================
 router.use(verificarAccesoInterno);
 
+
 // ==========================================
 // 4. RUTAS PRIVADAS ESTÁTICAS (SuperAdmin / Admin)
 // ==========================================
