@@ -22,14 +22,16 @@ export const verificarAccesoInterno = (req: CustomRequest, res: Response, next: 
     console.log("Rol de Usuario:", userRol);
     console.log("===============================\n");
 
-// 1. PRENDEMOS EL GUARDIA DE LA LLAVE OTRA VEZ
-    if (!apiKey || apiKey !== 'clave-secreta-interna-modaglobal') {
+    // 1. EL GUARDIA DE LA LLAVE (Con plan de rescate por si el .env falla)
+    const llaveMaestra = process.env.INTERNAL_API_KEY || 'clave-secreta-interna-modaglobal';
+
+    if (!apiKey || apiKey !== llaveMaestra) {
         logger.error(`BLOQUEO: Intento de bypass de Gateway desde IP: ${req.ip}`);
         res.status(403).json({ error: 'Acceso denegado. Use el API Gateway.' });
         return;
     }
 
-    // 2. Este sí lo dejamos prendido para ver si el Gateway te manda tu ID
+    // 2. EL GUARDIA DE IDENTIDAD (El que te está dando el 401 si no te logueas)
     if (!userId || !userRol) {
         logger.error(`BLOQUEO: Petición sin identidad de usuario o rol.`);
         res.status(401).json({ error: 'Identidad o rol de usuario no proporcionados.' });

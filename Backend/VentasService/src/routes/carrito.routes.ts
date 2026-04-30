@@ -8,13 +8,13 @@ import {
     clearCarritoDB 
 } from '../controllers/carrito.controller';
 
-// IMPORTANTE: Si tienes un middleware para verificar el JWT del usuario, impórtalo aquí.
-// Ejemplo: import { verificarAutenticacion } from '../middlewares/auth';
+// 👇 1. IMPORTAMOS A TU GUARDIA DE SEGURIDAD PERFECTO
+import { verificarAccesoInterno } from '../middlewares/Security';
 
 const router = Router();
 
-// Si tienes el middleware, ponlo aquí para proteger todas las rutas del carrito
-// router.use(verificarAutenticacion); 
+// 👇 2. LO ACTIVAMOS PARA QUE ATRAPE TU ID Y PROTEJA EL CARRITO
+router.use(verificarAccesoInterno); 
 
 router.get('/', getCarrito);
 router.post('/item', upsertCarritoItem);

@@ -1,8 +1,8 @@
 // src/context/CartContext.tsx
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext, useState, useEffect, useRef } from 'react';
 import { type Producto } from '../types/Producto';
-import { useAuth } from './AuthContext'; // Importamos el contexto de autenticación
-import { apiService } from '../services/ApiService'; // Asumiendo que aquí pondrás las llamadas
+import { useAuth } from './AuthContext'; 
+import { apiService } from '../services/ApiService'; 
 import Swal from 'sweetalert2';
 
 interface CartItem {
@@ -26,106 +26,124 @@ const CartContext = createContext<CartContextType | undefined>(undefined);
 export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { isAuthenticated, user } = useAuth();
   const [loading, setLoading] = useState(false);
+  const isSyncing = useRef(false); // 🚩 Bandera para evitar que se ejecute 2 veces al mismo tiempo
+  
   const [cart, setCart] = useState<CartItem[]>(() => {
     const savedCart = localStorage.getItem('mg_cart');
     return savedCart ? JSON.parse(savedCart) : [];
   });
 
-  // 1. Efecto para persistencia local (siempre corre)
   useEffect(() => {
     localStorage.setItem('mg_cart', JSON.stringify(cart));
   }, [cart]);
 
-  // 2. Efecto de Sincronización: Cuando el usuario se loguea
   useEffect(() => {
-    if (isAuthenticated && user) {
+    if (isAuthenticated && user && !isSyncing.current) {
       syncLocalCartToDB();
     }
-  }, [isAuthenticated]);
+  }, [isAuthenticated, user]);
 
   const syncLocalCartToDB = async () => {
-    if (cart.length === 0) {
-      // Si no hay nada local, traemos lo que ya tenga en la DB
-      loadCartFromDB();
-      return;
-    }
-    
-    setLoading(true);
+    if (isSyncing.current) return;
+    isSyncing.current = true; // Bloqueamos nuevas ejecuciones
+
     try {
-      // Mandamos los productos locales a la tabla 'Carrito'
-      // Tu API de VentasService debería tener un endpoint de "bulk insert" o "sync"
-      await apiService.syncCarrito(cart); 
-      // Una vez sincronizado, limpiamos el local y traemos la versión final de la DB
-      loadCartFromDB();
+      if (cart.length > 0) {
+        await apiService.syncCarrito(cart); 
+      }
+      await loadCartFromDB();
     } catch (error) {
-      console.error("Error al sincronizar carrito:", error);
+      console.error("Error en sincronización:", error);
     } finally {
-      setLoading(false);
+      isSyncing.current = false; // Liberamos
     }
   };
 
   const loadCartFromDB = async () => {
     try {
       const res = await apiService.getCarrito();
-      if (res.success) {
-        setCart(res.data); // Actualizamos el estado con lo de Azure SQL
+      if (res.success && res.data) {
+        const dbItems = res.data;
+
+        setCart(prevCart => {
+          // 🛠️ ESTRATEGIA DE DEPURACIÓN TOTAL
+          // Creamos un mapa con lo que ya tenemos para recuperar imágenes/precios rápidamente
+          const infoMap = new Map();
+          prevCart.forEach(item => {
+            const id = item.producto?.id_producto || (item as any).id_producto;
+            if (id) infoMap.set(id, item.producto);
+          });
+
+          // Filtramos duplicados basándonos únicamente en los IDs que vienen de la DB
+          const uniqueIds = new Set();
+          const cleanCart: CartItem[] = [];
+
+          dbItems.forEach((dbItem: any) => {
+            if (!uniqueIds.has(dbItem.id_producto)) {
+              uniqueIds.add(dbItem.id_producto);
+              
+              cleanCart.push({
+                // Si ya teníamos el producto con imagen en el mapa, lo usamos
+                producto: infoMap.get(dbItem.id_producto) || { id_producto: dbItem.id_producto } as Producto,
+                cantidad: dbItem.cantidad
+              });
+            }
+          });
+
+          return cleanCart;
+        });
       }
     } catch (error) {
-      console.error("Error al cargar carrito de DB:", error);
+      console.error("Error al cargar carrito:", error);
     }
   };
 
   const addToCart = async (producto: Producto, cantidad: number) => {
-    const existingItem = cart.find(item => item.producto.id_producto === producto.id_producto);
+    const productId = producto.id_producto;
+    const existingItem = cart.find(item => 
+      (item.producto?.id_producto || (item as any).id_producto) === productId
+    );
+    
     const nuevaCantidad = existingItem ? existingItem.cantidad + cantidad : cantidad;
 
-    // Si está logueado, mandamos el cambio a la base de datos
     if (isAuthenticated) {
       try {
-        await apiService.upsertCarritoItem(producto.id_producto, nuevaCantidad);
-      } catch (error) {
-        console.error("No se pudo guardar en DB", error);
-      }
+        await apiService.upsertCarritoItem(productId, nuevaCantidad);
+      } catch (error) { console.error(error); }
     }
 
-    // Actualizamos estado local para que la UI responda rápido
     setCart(prevCart => {
       if (existingItem) {
         return prevCart.map(item => 
-          item.producto.id_producto === producto.id_producto 
+          (item.producto?.id_producto || (item as any).id_producto) === productId 
             ? { ...item, cantidad: nuevaCantidad }
             : item
         );
       }
       return [...prevCart, { producto, cantidad }];
     });
-
-    showToast('Agregado al carrito');
+    showToast('Agregado');
   };
 
   const removeFromCart = async (productoId: string) => {
-    if (isAuthenticated) {
-      await apiService.removeFromCarrito(productoId);
-    }
-    setCart(prevCart => prevCart.filter(item => item.producto.id_producto !== productoId));
+    if (isAuthenticated) await apiService.removeFromCarrito(productoId);
+    setCart(prevCart => prevCart.filter(item => 
+      (item.producto?.id_producto || (item as any).id_producto) !== productoId
+    ));
   };
 
   const updateQuantity = async (productoId: string, cantidad: number) => {
     if (cantidad < 1) return;
-    
-    if (isAuthenticated) {
-      await apiService.upsertCarritoItem(productoId, cantidad);
-    }
-
+    if (isAuthenticated) await apiService.upsertCarritoItem(productoId, cantidad);
     setCart(prevCart => prevCart.map(item => 
-      item.producto.id_producto === productoId ? { ...item, cantidad } : item
+      (item.producto?.id_producto || (item as any).id_producto) === productoId 
+        ? { ...item, cantidad } 
+        : item
     ));
   };
 
   const clearCart = async () => {
-    if (isAuthenticated) {
-      await apiService.clearCarritoDB();
-    }
+    if (isAuthenticated) await apiService.clearCarritoDB();
     setCart([]);
   };
 
@@ -143,8 +161,10 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
     });
   };
 
-  const totalItems = cart.reduce((total, item) => total + item.cantidad, 0);
-  const totalPrice = cart.reduce((total, item) => total + (Number(item.producto.precio_base) * item.cantidad), 0);
+  const totalItems = cart.reduce((total, item) => total + (item.cantidad || 0), 0);
+  const totalPrice = cart.reduce((total, item) => 
+    total + (Number(item.producto?.precio_base || 0) * (item.cantidad || 0)), 
+  0);
 
   return (
     <CartContext.Provider value={{ cart, addToCart, removeFromCart, updateQuantity, clearCart, totalItems, totalPrice, loading }}>

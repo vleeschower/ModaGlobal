@@ -95,9 +95,10 @@ app.post('/api/productos/proveedores/vincular', limitadorSeguridad);
 app.post('/api/productos/resenas', limitadorSeguridad);
 app.delete('/api/productos/:id', limitadorSeguridad);
 
-// 👇 NUEVO: Rate limits para el carrito para que no te saturen la BD dándole mil clics al botón
-app.post('/api/carrito/item', limitadorSeguridad);
-app.post('/api/carrito/sync', limitadorSeguridad);
+// // 👇 NUEVO: Rate limits para el carrito para que no te saturen la BD dándole mil clics al botón
+// app.post('/api/carrito/item', limitadorSeguridad);
+// app.post('/api/carrito/sync', limitadorSeguridad);
+app.use('/api/carrito', limitadorSeguridad, validarAccesoGoblal, createProxyMiddleware(carritoProxyOptions));
 
 // C. ENRUTADOR MAESTRO OMNICANAL
 app.use('/api/usuarios', validarAccesoGoblal, createProxyMiddleware(usuarioProxyOptions));

@@ -44,67 +44,83 @@ const Cart: React.FC = () => {
               </div>
 
               <div className="divide-y divide-gray-100">
-                {cart.map((item) => (
-                  <div key={item.producto.id_producto} className="py-6 grid grid-cols-1 md:grid-cols-12 gap-4 items-center">
-                    
-                    {/* Imagen y Nombre */}
-                    <div className="col-span-1 md:col-span-6 flex items-center gap-4">
-                      <div className="w-24 h-24 bg-gray-50 rounded-xl overflow-hidden border border-gray-100 shrink-0">
-                        <img 
-                          src={item.producto.imagen_url || 'https://via.placeholder.com/150'} 
-                          alt={item.producto.nombre} 
-                          className="w-full h-full object-cover"
-                        />
+                {cart.map((item, index) => {
+                  // --- LÓGICA DE BLINDAJE PARA DATOS DE MICROSERVICIOS ---
+                  // 1. Extraemos el ID sin importar si viene plano o anidado
+                  const productId = item.producto?.id_producto || (item as any).id_producto || `temp-id-${index}`;
+                  
+                  // 2. Forzamos a que 'prod' sea al menos un objeto vacío para que no truene el render
+                  const prod = item.producto || {} as any;
+                  
+                  // 3. Variables seguras con valores por defecto (DummyImage es más estable que Placeholder)
+                  const imagenSegura = prod.imagen_url || 'https://dummyimage.com/150x150/f3f4f6/a1a1aa.png&text=Sin+Imagen';
+                  const nombreSeguro = prod.nombre || 'Cargando producto...';
+                  const categoriaSegura = prod.id_categoria || 'General';
+                  const precioSeguro = Number(prod.precio_base || 0);
+
+                  return (
+                    <div key={productId} className="py-6 grid grid-cols-1 md:grid-cols-12 gap-4 items-center">
+                      
+                      {/* Imagen y Nombre */}
+                      <div className="col-span-1 md:col-span-6 flex items-center gap-4">
+                        <div className="w-24 h-24 bg-gray-50 rounded-xl overflow-hidden border border-gray-100 shrink-0">
+                          <img 
+                            src={imagenSegura} 
+                            alt={nombreSeguro} 
+                            className="w-full h-full object-cover"
+                            onError={(e) => { (e.target as HTMLImageElement).src = 'https://dummyimage.com/150x150/f3f4f6/a1a1aa.png&text=Error+Img'; }}
+                          />
+                        </div>
+                        <div className="flex flex-col">
+                          <span className="text-xs font-bold text-primary-esmeralda uppercase tracking-widest mb-1">
+                            {categoriaSegura}
+                          </span>
+                          <Link to={`/producto/${productId}`} className="text-lg font-bold text-slate-900 hover:text-primary transition-colors">
+                            {nombreSeguro}
+                          </Link>
+                          <span className="text-gray-500 font-medium mt-1">${precioSeguro.toFixed(2)} c/u</span>
+                        </div>
                       </div>
-                      <div className="flex flex-col">
-                        <span className="text-xs font-bold text-primary-esmeralda uppercase tracking-widest mb-1">
-                          {item.producto.id_categoria || 'Categoría'}
+
+                      {/* Controles de Cantidad */}
+                      <div className="col-span-1 md:col-span-3 flex justify-start md:justify-center">
+                        <div className="flex items-center border border-gray-200 rounded-xl overflow-hidden bg-gray-50 h-10">
+                          <button 
+                            onClick={() => updateQuantity(productId, item.cantidad - 1)}
+                            className="px-3 h-full hover:bg-gray-200 transition-colors font-bold text-gray-600"
+                          >
+                            -
+                          </button>
+                          <span className="px-4 font-bold text-slate-900 text-center text-sm">{item.cantidad}</span>
+                          <button 
+                            onClick={() => updateQuantity(productId, item.cantidad + 1)}
+                            className="px-3 h-full hover:bg-gray-200 transition-colors font-bold text-gray-600"
+                          >
+                            +
+                          </button>
+                        </div>
+                      </div>
+
+                      {/* Subtotal del Item */}
+                      <div className="col-span-1 md:col-span-2 text-left md:text-right">
+                        <span className="text-lg font-black text-slate-900">
+                          ${(precioSeguro * item.cantidad).toFixed(2)}
                         </span>
-                        <Link to={`/producto/${item.producto.id_producto}`} className="text-lg font-bold text-slate-900 hover:text-primary transition-colors">
-                          {item.producto.nombre}
-                        </Link>
-                        <span className="text-gray-500 font-medium mt-1">${Number(item.producto.precio_base).toFixed(2)} c/u</span>
                       </div>
-                    </div>
 
-                    {/* Controles de Cantidad */}
-                    <div className="col-span-1 md:col-span-3 flex justify-start md:justify-center">
-                      <div className="flex items-center border border-gray-200 rounded-xl overflow-hidden bg-gray-50 h-10">
+                      {/* Botón Eliminar */}
+                      <div className="col-span-1 md:col-span-1 flex justify-end">
                         <button 
-                          onClick={() => updateQuantity(item.producto.id_producto, item.cantidad - 1)}
-                          className="px-3 h-full hover:bg-gray-200 transition-colors font-bold text-gray-600"
+                          onClick={() => removeFromCart(productId)}
+                          className="w-10 h-10 rounded-full flex items-center justify-center text-gray-400 hover:text-red-500 hover:bg-red-50 transition-all"
+                          title="Eliminar producto"
                         >
-                          -
-                        </button>
-                        <span className="px-4 font-bold text-slate-900 text-center text-sm">{item.cantidad}</span>
-                        <button 
-                          onClick={() => updateQuantity(item.producto.id_producto, item.cantidad + 1)}
-                          className="px-3 h-full hover:bg-gray-200 transition-colors font-bold text-gray-600"
-                        >
-                          +
+                          <span className="material-symbols-outlined text-[20px]">delete</span>
                         </button>
                       </div>
                     </div>
-
-                    {/* Subtotal del Item */}
-                    <div className="col-span-1 md:col-span-2 text-left md:text-right">
-                      <span className="text-lg font-black text-slate-900">
-                        ${(Number(item.producto.precio_base) * item.cantidad).toFixed(2)}
-                      </span>
-                    </div>
-
-                    {/* Botón Eliminar */}
-                    <div className="col-span-1 md:col-span-1 flex justify-end">
-                      <button 
-                        onClick={() => removeFromCart(item.producto.id_producto)}
-                        className="w-10 h-10 rounded-full flex items-center justify-center text-gray-400 hover:text-red-500 hover:bg-red-50 transition-all"
-                        title="Eliminar producto"
-                      >
-                        <span className="material-symbols-outlined text-[20px]">delete</span>
-                      </button>
-                    </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             </div>
 

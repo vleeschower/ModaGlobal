@@ -10,8 +10,12 @@ app.use(cors());
 app.use(express.json()); 
 app.use(express.urlencoded({ extended: true }));
 
-// Montamos las rutas de ventas
+// (Puedes borrar el sniffer si quieres, ya hizo su trabajo histórico)
+
+// 👇 1. EL CARRITO AHORA ESCUCHA EN LA RAÍZ (Atrapará /sync, /item y /)
+app.use('/', carritoRoutes);
+
+// 👇 2. VENTAS AL FINAL (Atrapará todo lo demás)
 app.use('/', ventasRoutes);
-app.use('/api/carrito', carritoRoutes);
 
 export default app;

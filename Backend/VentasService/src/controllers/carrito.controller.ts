@@ -23,7 +23,7 @@ const getOrCreateActiveCart = async (id_usuario: string) => {
         
         carrito = await prisma.carrito.create({
             data: {
-                id_carrito: nuevoIdCarrito, // <-- Aquí solucionamos el error de la línea 22
+                id_carrito: nuevoIdCarrito, 
                 id_usuario: id_usuario,
                 estado: 'PENDIENTE'
             }
@@ -39,7 +39,8 @@ const getOrCreateActiveCart = async (id_usuario: string) => {
 
 export const getCarrito = async (req: Request, res: Response) => {
     try {
-        const id_usuario = (req as any).user.id_usuario; 
+        // 👇 AHORA LEE LA VARIABLE CORRECTA DEL GUARDIA
+        const id_usuario = (req as any).usuarioTransaccion; 
         const carrito = await getOrCreateActiveCart(id_usuario);
 
         // Usamos carritoItem (camelCase) como manda Prisma
@@ -56,7 +57,8 @@ export const getCarrito = async (req: Request, res: Response) => {
 
 export const upsertCarritoItem = async (req: Request, res: Response) => {
     try {
-        const id_usuario = (req as any).user.id_usuario;
+        // 👇 AHORA LEE LA VARIABLE CORRECTA DEL GUARDIA
+        const id_usuario = (req as any).usuarioTransaccion;
         const { id_producto, cantidad } = req.body;
         
         if (!id_producto || cantidad === undefined) {
@@ -97,8 +99,10 @@ export const upsertCarritoItem = async (req: Request, res: Response) => {
 
 export const syncCarrito = async (req: Request, res: Response) => {
     try {
-        const id_usuario = (req as any).user.id_usuario;
-        const { items } = req.body; 
+        const id_usuario = (req as any).usuarioTransaccion;
+        
+        // Magia 1: Atrapamos el array de items, no importa si React lo manda envuelto en {items: ...} o directo [...]
+        const items = req.body.items || req.body; 
 
         if (!items || !Array.isArray(items)) {
             return res.status(400).json({ success: false, message: 'Formato de items inválido' });
@@ -107,8 +111,12 @@ export const syncCarrito = async (req: Request, res: Response) => {
         const carrito = await getOrCreateActiveCart(id_usuario);
 
         for (const localItem of items) {
-            const prodId = localItem.producto.id_producto;
+            // 👇 MAGIA 2: Sacamos el ID sin importar si viene "anidado" (desde el local) o "plano" (desde la DB)
+            const prodId = localItem.producto?.id_producto || localItem.id_producto;
             const cant = localItem.cantidad;
+
+            // Si por alguna razón el item está vacío o corrupto, lo saltamos para que no tire el servidor
+            if (!prodId) continue; 
 
             const itemExistente = await prisma.carritoItem.findFirst({
                 where: {
@@ -125,7 +133,7 @@ export const syncCarrito = async (req: Request, res: Response) => {
             } else {
                 await prisma.carritoItem.create({
                     data: {
-                        id_item: `ITM-${crypto.randomUUID()}`, // <-- ID escalable
+                        id_item: `ITM-${crypto.randomUUID()}`,
                         id_carrito: carrito.id_carrito,
                         id_producto: prodId,
                         cantidad: cant
@@ -143,9 +151,10 @@ export const syncCarrito = async (req: Request, res: Response) => {
 
 export const removeFromCarrito = async (req: Request, res: Response) => {
     try {
-        const id_usuario = (req as any).user.id_usuario;
+        // 👇 AHORA LEE LA VARIABLE CORRECTA DEL GUARDIA
+        const id_usuario = (req as any).usuarioTransaccion;
         
-        // 👇 AQUÍ ESTÁ LA MAGIA: Le agregamos "as string"
+        // AQUÍ ESTÁ LA MAGIA: Le agregamos "as string"
         const id_producto = req.params.id_producto as string;
         
         const carrito = await prisma.carrito.findFirst({
@@ -176,7 +185,8 @@ export const removeFromCarrito = async (req: Request, res: Response) => {
 
 export const clearCarritoDB = async (req: Request, res: Response) => {
     try {
-        const id_usuario = (req as any).user.id_usuario;
+        // 👇 AHORA LEE LA VARIABLE CORRECTA DEL GUARDIA
+        const id_usuario = (req as any).usuarioTransaccion;
         const carrito = await prisma.carrito.findFirst({
             where: { id_usuario, estado: 'PENDIENTE' }
         });
