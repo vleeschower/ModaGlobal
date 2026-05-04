@@ -26,77 +26,90 @@ const CartContext = createContext<CartContextType | undefined>(undefined);
 export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { isAuthenticated, user } = useAuth();
   const [loading, setLoading] = useState(false);
-  const isSyncing = useRef(false); // 🚩 Bandera para evitar que se ejecute 2 veces al mismo tiempo
+  const isSyncing = useRef(false); 
   
+  // 1. Iniciamos el carrito desde el LocalStorage
   const [cart, setCart] = useState<CartItem[]>(() => {
     const savedCart = localStorage.getItem('mg_cart');
     return savedCart ? JSON.parse(savedCart) : [];
   });
 
+  // 2. Guardamos en LocalStorage cada que el carrito cambie
   useEffect(() => {
     localStorage.setItem('mg_cart', JSON.stringify(cart));
   }, [cart]);
 
+  // 3. Efecto maestro: Solo se dispara cuando inicias sesión o das F5 estando logueado
   useEffect(() => {
     if (isAuthenticated && user && !isSyncing.current) {
-      syncLocalCartToDB();
+      smartSyncCart();
     }
   }, [isAuthenticated, user]);
 
-  const syncLocalCartToDB = async () => {
+  // ==============================================================
+  // 🧠 LA MAGIA ANTI-DUPLICADOS (Smart Diffing)
+  // ==============================================================
+  const smartSyncCart = async () => {
     if (isSyncing.current) return;
-    isSyncing.current = true; // Bloqueamos nuevas ejecuciones
+    isSyncing.current = true;
+    setLoading(true);
 
     try {
-      if (cart.length > 0) {
-        await apiService.syncCarrito(cart); 
-      }
-      await loadCartFromDB();
-    } catch (error) {
-      console.error("Error en sincronización:", error);
-    } finally {
-      isSyncing.current = false; // Liberamos
-    }
-  };
-
-  const loadCartFromDB = async () => {
-    try {
+      // 1. Pedimos la verdad absoluta a la base de datos
       const res = await apiService.getCarrito();
-      if (res.success && res.data) {
-        const dbItems = res.data;
+      const dbItems = (res.success && res.data) ? res.data : [];
 
-        setCart(prevCart => {
-          // 🛠️ ESTRATEGIA DE DEPURACIÓN TOTAL
-          // Creamos un mapa con lo que ya tenemos para recuperar imágenes/precios rápidamente
-          const infoMap = new Map();
-          prevCart.forEach(item => {
-            const id = item.producto?.id_producto || (item as any).id_producto;
-            if (id) infoMap.set(id, item.producto);
-          });
+      // 2. Comparamos: Buscamos items locales que NO existan en la DB
+      const itemsNuevosParaLaDB = cart.filter(localItem => {
+        const localId = localItem.producto?.id_producto || (localItem as any).id_producto;
+        const existeEnDB = dbItems.some((dbItem: any) => dbItem.id_producto === localId);
+        // Solo conservamos los que NO están en la DB
+        return !existeEnDB;
+      });
 
-          // Filtramos duplicados basándonos únicamente en los IDs que vienen de la DB
-          const uniqueIds = new Set();
-          const cleanCart: CartItem[] = [];
-
-          dbItems.forEach((dbItem: any) => {
-            if (!uniqueIds.has(dbItem.id_producto)) {
-              uniqueIds.add(dbItem.id_producto);
-              
-              cleanCart.push({
-                // Si ya teníamos el producto con imagen en el mapa, lo usamos
-                producto: infoMap.get(dbItem.id_producto) || { id_producto: dbItem.id_producto } as Producto,
-                cantidad: dbItem.cantidad
-              });
-            }
-          });
-
-          return cleanCart;
-        });
+      // 3. SOLO enviamos algo si hay items nuevos. ¡Esto evita que el F5 sume infinitamente!
+      if (itemsNuevosParaLaDB.length > 0) {
+        await apiService.syncCarrito(itemsNuevosParaLaDB);
+        // Como enviamos cosas nuevas, volvemos a descargar la versión final de la DB
+        const finalRes = await apiService.getCarrito();
+        if (finalRes.success && finalRes.data) {
+          aplicarDatosDBalFrontend(finalRes.data);
+        }
+      } else {
+        // 4. Si no hay nada nuevo (F5 normal), simplemente copiamos las cantidades de la DB al frontend
+        aplicarDatosDBalFrontend(dbItems);
       }
+
     } catch (error) {
-      console.error("Error al cargar carrito:", error);
+      console.error("Error en sincronización inteligente:", error);
+    } finally {
+      isSyncing.current = false;
+      setLoading(false);
     }
   };
+
+  // Función para re-armar el carrito usando los datos de la DB pero rescatando las fotos locales
+  const aplicarDatosDBalFrontend = (dbItems: any[]) => {
+    setCart(prevCart => {
+      // Guardamos las fotos y precios que ya tenemos en memoria
+      const infoMap = new Map();
+      prevCart.forEach(item => {
+        const id = item.producto?.id_producto || (item as any).id_producto;
+        if (id && item.producto?.nombre) {
+          infoMap.set(id, item.producto);
+        }
+      });
+
+      // Armamos el carrito exacto sin sumar nada, copiando exactamente la cantidad de la DB
+      const cleanCart: CartItem[] = dbItems.map((dbItem: any) => ({
+        producto: infoMap.get(dbItem.id_producto) || { id_producto: dbItem.id_producto } as Producto,
+        cantidad: dbItem.cantidad
+      }));
+
+      return cleanCart;
+    });
+  };
+  // ==============================================================
 
   const addToCart = async (producto: Producto, cantidad: number) => {
     const productId = producto.id_producto;
@@ -122,7 +135,7 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
       return [...prevCart, { producto, cantidad }];
     });
-    showToast('Agregado');
+    showToast('Agregado al carrito');
   };
 
   const removeFromCart = async (productoId: string) => {
@@ -135,6 +148,7 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const updateQuantity = async (productoId: string, cantidad: number) => {
     if (cantidad < 1) return;
     if (isAuthenticated) await apiService.upsertCarritoItem(productoId, cantidad);
+    
     setCart(prevCart => prevCart.map(item => 
       (item.producto?.id_producto || (item as any).id_producto) === productoId 
         ? { ...item, cantidad } 
@@ -149,15 +163,9 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const showToast = (title: string) => {
     Swal.fire({
-      toast: true,
-      position: 'bottom-end',
-      icon: 'success',
-      title,
-      showConfirmButton: false,
-      timer: 1500,
-      timerProgressBar: true,
-      background: '#10b981',
-      color: '#fff'
+      toast: true, position: 'bottom-end', icon: 'success', title,
+      showConfirmButton: false, timer: 1500, timerProgressBar: true,
+      background: '#10b981', color: '#fff'
     });
   };
 

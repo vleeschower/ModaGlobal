@@ -42,9 +42,18 @@ export interface PromocionAdmin {
   [key: string]: any; 
 }
 
-// 3. Función Helper para obtener el token del localStorage
+// 3. Función Helper para obtener el token del localStorage (¡BLINDADA!)
 const getToken = (): string | null => {
-  return localStorage.getItem('mg_token');
+  // Buscamos en 'mg_token', si no está, buscamos en 'token'
+  let token = localStorage.getItem('mg_token') || localStorage.getItem('token');
+  
+  if (!token || token === 'undefined' || token === 'null' || token.trim() === '') {
+    return null;
+  }
+  
+  // Le quitamos las comillas iniciales y finales si es que las tiene (el fantasma 1)
+  token = token.replace(/^"|"$/g, '');
+  return token;
 };
 
 // 4. Función Helper para inyectar el Token en las peticiones
@@ -76,7 +85,7 @@ const getFormDataHeaders = (): HeadersInit => {
 const checkAuth = (): boolean => {
   const token = getToken();
   if (!token) {
-    console.warn('[api.service] No hay token de autenticación');
+    console.warn('[api.service] No hay token de autenticación válido.');
     return false;
   }
   return true;
@@ -238,8 +247,6 @@ export const apiService = {
       formData.append('sku', form.sku || '');
       formData.append('id_categoria', form.id_categoria || ''); 
 
-      // ⚠️ CORRECCIÓN: Se eliminó el "formData.append('stock_inicial', '10');" duplicado.
-      // Aseguramos que stock_inicial viaje como string y no como número para que FormData no falle
       formData.append('stock_inicial', String(form.stock_inicial || '0')); 
 
       // 2. Especificaciones
@@ -422,6 +429,22 @@ export const apiService = {
     } catch (error: any) {
       console.error('Error en clearCarritoDB:', error);
       return { success: false, message: 'Error al vaciar el carrito en la nube.' };
+    }
+  },
+
+  procesarPago: async (tokenId: string, deviceSessionId: string, totalFront: number): Promise<ApiResponse<any>> => {
+    try {
+      if (!checkAuth()) return { success: false, message: 'No autenticado.' };
+      
+    const response = await fetch(`${API_BASE_URL}/api/pagos/checkout`, {
+      method: 'POST',
+      headers: getAuthHeaders(),
+      body: JSON.stringify({ tokenId, deviceSessionId, totalFront })
+    });
+      return await response.json();
+    } catch (error: any) {
+      console.error('Error al procesar pago:', error);
+      return { success: false, message: 'Error de red al procesar el pago.' };
     }
   }
 };

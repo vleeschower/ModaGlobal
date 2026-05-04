@@ -1,11 +1,16 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
 import Header from '../components/header';
 import Footer from '../components/footer';
 import { useCart } from '../context/CartContext';
+// 👇 Importamos tu nuevo componente de Checkout
+import Checkout from '../components/Checkout'; // Ajusta la ruta si Checkout.tsx está en otra carpeta
 
 const Cart: React.FC = () => {
   const { cart, updateQuantity, removeFromCart, totalPrice, totalItems } = useCart();
+  
+  // 👇 Estado para controlar cuándo mostrar el formulario de la tarjeta
+  const [mostrarPago, setMostrarPago] = useState(false);
 
   return (
     <div className="bg-[#F8F9FA] min-h-screen flex flex-col font-sans">
@@ -45,14 +50,9 @@ const Cart: React.FC = () => {
 
               <div className="divide-y divide-gray-100">
                 {cart.map((item, index) => {
-                  // --- LÓGICA DE BLINDAJE PARA DATOS DE MICROSERVICIOS ---
-                  // 1. Extraemos el ID sin importar si viene plano o anidado
                   const productId = item.producto?.id_producto || (item as any).id_producto || `temp-id-${index}`;
-                  
-                  // 2. Forzamos a que 'prod' sea al menos un objeto vacío para que no truene el render
                   const prod = item.producto || {} as any;
                   
-                  // 3. Variables seguras con valores por defecto (DummyImage es más estable que Placeholder)
                   const imagenSegura = prod.imagen_url || 'https://dummyimage.com/150x150/f3f4f6/a1a1aa.png&text=Sin+Imagen';
                   const nombreSeguro = prod.nombre || 'Cargando producto...';
                   const categoriaSegura = prod.id_categoria || 'General';
@@ -124,7 +124,7 @@ const Cart: React.FC = () => {
               </div>
             </div>
 
-            {/* TARJETA DE RESUMEN */}
+            {/* TARJETA DE RESUMEN Y CHECKOUT */}
             <div className="w-full lg:w-1/3 bg-white rounded-3xl p-6 md:p-8 shadow-sm border border-gray-100 sticky top-24">
               <h2 className="text-xl font-bold text-slate-900 mb-6">Resumen del pedido</h2>
               
@@ -147,15 +147,36 @@ const Cart: React.FC = () => {
                 <p className="text-xs text-gray-400 text-right mt-1">Impuestos incluidos</p>
               </div>
 
-              <button className="w-full bg-slate-900 text-white py-4 rounded-xl font-bold hover:bg-primary-esmeralda transition-colors shadow-lg active:scale-95 flex items-center justify-center gap-2">
-                <span className="material-symbols-outlined">lock</span>
-                Proceder al pago
-              </button>
+              {/* 👇 LA MAGIA CONDICIONAL: Mostramos el botón o el formulario */}
+              {!mostrarPago ? (
+                <>
+                  <button 
+                    onClick={() => setMostrarPago(true)}
+                    className="w-full bg-slate-900 text-white py-4 rounded-xl font-bold hover:bg-primary-esmeralda transition-colors shadow-lg active:scale-95 flex items-center justify-center gap-2"
+                  >
+                    <span className="material-symbols-outlined">lock</span>
+                    Proceder al pago
+                  </button>
+                  <div className="mt-6 flex items-center justify-center gap-2 text-gray-400 text-xs font-medium">
+                    <span className="material-symbols-outlined text-[16px]">verified_user</span>
+                    Pago 100% seguro y encriptado
+                  </div>
+                </>
+              ) : (
+                <div className="animate-fade-in">
+                  <button 
+                    onClick={() => setMostrarPago(false)}
+                    className="text-sm font-bold text-gray-400 hover:text-slate-900 mb-4 flex items-center gap-1 transition-colors"
+                  >
+                    <span className="material-symbols-outlined text-[18px]">arrow_back</span>
+                    Regresar al resumen
+                  </button>
+                  
+                  {/* AQUÍ CARGA TU COMPONENTE DE OPENPAY */}
+                  <Checkout />
+                </div>
+              )}
 
-              <div className="mt-6 flex items-center justify-center gap-2 text-gray-400 text-xs font-medium">
-                <span className="material-symbols-outlined text-[16px]">verified_user</span>
-                Pago 100% seguro y encriptado
-              </div>
             </div>
 
           </div>

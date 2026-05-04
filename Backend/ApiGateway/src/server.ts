@@ -79,6 +79,13 @@ const carritoProxyOptions: Options = {
     on: { proxyReq: (proxyReq, req, _res) => configurarHeadersSeguridad(proxyReq as ClientRequest, req as AuthRequest) }
 };
 
+// 👇 NUEVO: Creamos el proxy para los pagos, apuntando al VentasService (3003)
+const pagoProxyOptions: Options = {
+    target: 'http://localhost:3003',
+    changeOrigin: true,
+    on: { proxyReq: (proxyReq, req, _res) => configurarHeadersSeguridad(proxyReq as ClientRequest, req as AuthRequest) }
+};
+
 // ==========================================================
 // 3. ASIGNACIÓN DE RUTAS
 // ==========================================================
@@ -95,18 +102,17 @@ app.post('/api/productos/proveedores/vincular', limitadorSeguridad);
 app.post('/api/productos/resenas', limitadorSeguridad);
 app.delete('/api/productos/:id', limitadorSeguridad);
 
-// // 👇 NUEVO: Rate limits para el carrito para que no te saturen la BD dándole mil clics al botón
-// app.post('/api/carrito/item', limitadorSeguridad);
-// app.post('/api/carrito/sync', limitadorSeguridad);
-app.use('/api/carrito', limitadorSeguridad, validarAccesoGoblal, createProxyMiddleware(carritoProxyOptions));
-
 // C. ENRUTADOR MAESTRO OMNICANAL
 app.use('/api/usuarios', validarAccesoGoblal, createProxyMiddleware(usuarioProxyOptions));
 app.use('/api/venta', validarAccesoGoblal, createProxyMiddleware(ventaProxyOptions));
 app.use('/api/productos', validarAccesoGoblal, createProxyMiddleware(productoProxyOptions));
 
-// 👇 NUEVO: Ruta principal del carrito
-app.use('/api/carrito', validarAccesoGoblal, createProxyMiddleware(carritoProxyOptions));
+// Ruta principal del carrito protegida con rate limit
+app.use('/api/carrito', limitadorSeguridad, validarAccesoGoblal, createProxyMiddleware(carritoProxyOptions));
+
+// 👇 NUEVO: Activamos la ruta de pagos en el Gateway
+app.use('/api/pagos', validarAccesoGoblal, createProxyMiddleware(pagoProxyOptions));
+
 // ==========================================================
 // 4. INICIO DEL SERVIDOR
 // ==========================================================
