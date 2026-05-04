@@ -43,12 +43,56 @@ export const getCarrito = async (req: Request, res: Response) => {
         const id_usuario = (req as any).usuarioTransaccion; 
         const carrito = await getOrCreateActiveCart(id_usuario);
 
-        // Usamos carritoItem (camelCase) como manda Prisma
+        // 1. Sacamos los items crudos de la BD (solo IDs y cantidad)
         const items = await prisma.carritoItem.findMany({
             where: { id_carrito: carrito.id_carrito }
         });
 
-        res.json({ success: true, data: items });
+        if (items.length === 0) {
+            return res.json({ success: true, data: [] });
+        }
+
+        // ================================================================
+        // 🔥 2. EL CRUCE CON PRODUCTOSERVICE (Para traer imágenes, nombres y precios)
+        // ================================================================
+        const idsProductos = items.map(item => item.id_producto);
+        let infoProductos: any[] = [];
+        
+        try {
+            const response = await fetch(`${process.env.API_GATEWAY_URL || 'http://localhost:3000'}/api/productos/detalles-multiples`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'x-api-key': process.env.INTERNAL_API_KEY || 'clave-secreta-interna-modaglobal'
+                },
+                body: JSON.stringify({ ids: idsProductos })
+            });
+
+            if (response.ok) {
+                infoProductos = await response.json();
+            } else {
+                console.warn("⚠️ No se pudo obtener info de productos para el carrito.");
+            }
+        } catch (error) {
+             console.error("❌ Error de red al contactar ProductoService:", error);
+        }
+
+        // 3. Mezclamos la cantidad con la foto y los detalles
+        const itemsCompletos = items.map(item => {
+            const productoReal = infoProductos.find(p => p.id_producto === item.id_producto);
+            
+            return {
+                id_item: item.id_item,
+                id_carrito: item.id_carrito,
+                id_producto: item.id_producto,
+                cantidad: item.cantidad,
+                // 👇 AQUÍ LE PEGAMOS TODA LA INFO PARA REACT (incluida la imagen)
+                producto: productoReal ? productoReal : null 
+            };
+        });
+
+        res.json({ success: true, data: itemsCompletos });
+
     } catch (error) {
         console.error('Error en getCarrito:', error);
         res.status(500).json({ success: false, message: 'Error al obtener el carrito' });
@@ -75,9 +119,10 @@ export const upsertCarritoItem = async (req: Request, res: Response) => {
         });
 
         if (itemExistente) {
+            // 👇 AQUÍ ESTÁ LA MAGIA: Sumamos la cantidad nueva a la que ya existía
             await prisma.carritoItem.update({
                 where: { id_item: itemExistente.id_item },
-                data: { cantidad: cantidad } 
+                data: { cantidad: itemExistente.cantidad + cantidad } 
             });
             res.json({ success: true, message: 'Cantidad actualizada' });
         } else {
@@ -111,11 +156,10 @@ export const syncCarrito = async (req: Request, res: Response) => {
         const carrito = await getOrCreateActiveCart(id_usuario);
 
         for (const localItem of items) {
-            // 👇 MAGIA 2: Sacamos el ID sin importar si viene "anidado" (desde el local) o "plano" (desde la DB)
+            // 👇 MAGIA 2: Sacamos el ID sin importar si viene "anidado" o "plano"
             const prodId = localItem.producto?.id_producto || localItem.id_producto;
             const cant = localItem.cantidad;
 
-            // Si por alguna razón el item está vacío o corrupto, lo saltamos para que no tire el servidor
             if (!prodId) continue; 
 
             const itemExistente = await prisma.carritoItem.findFirst({

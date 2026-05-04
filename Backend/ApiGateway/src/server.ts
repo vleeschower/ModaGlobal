@@ -40,6 +40,11 @@ const limitadorSeguridad = rateLimit({
         res.status(429).json({ error: 'Demasiadas peticiones. Acceso restringido por 5 minutos.' });
     },
     skipSuccessfulRequests: false, 
+    // 👇 LA MAGIA QUE AGREGAMOS 👇
+    skip: (req) => {
+        // Si la petición viene de tu propia computadora (localhost en IPv4 o IPv6), ignora el límite
+        return req.ip === '::1' || req.ip === '127.0.0.1' || req.ip === '::ffff:127.0.0.1';
+    }
 });
 
 // ==========================================================
@@ -79,7 +84,7 @@ const carritoProxyOptions: Options = {
     on: { proxyReq: (proxyReq, req, _res) => configurarHeadersSeguridad(proxyReq as ClientRequest, req as AuthRequest) }
 };
 
-// 👇 NUEVO: Creamos el proxy para los pagos, apuntando al VentasService (3003)
+// Proxy para los pagos, apuntando al VentasService (3003)
 const pagoProxyOptions: Options = {
     target: 'http://localhost:3003',
     changeOrigin: true,
@@ -110,7 +115,7 @@ app.use('/api/productos', validarAccesoGoblal, createProxyMiddleware(productoPro
 // Ruta principal del carrito protegida con rate limit
 app.use('/api/carrito', limitadorSeguridad, validarAccesoGoblal, createProxyMiddleware(carritoProxyOptions));
 
-// 👇 NUEVO: Activamos la ruta de pagos en el Gateway
+// Activamos la ruta de pagos en el Gateway
 app.use('/api/pagos', validarAccesoGoblal, createProxyMiddleware(pagoProxyOptions));
 
 // ==========================================================

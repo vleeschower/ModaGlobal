@@ -500,8 +500,6 @@ export const crearPromocion = async (req: any, res: Response): Promise<void> => 
 // ==========================================
 // MÓDULO: PROVEEDORES (Relación Muchos a Muchos)
 // ==========================================
-// src/controllers/ProductController.ts
-
 export const crearProveedor = async (req: any, res: Response): Promise<void> => {
     try {
         const { 
@@ -984,5 +982,53 @@ export const obtenerProductosAdmin = async (req: any, res: Response): Promise<vo
     } catch (error) {
         logger.error('Error al obtener productos para panel admin:', error);
         res.status(500).json({ error: 'Error interno al cargar la tabla de administración.' });
+    }
+};
+
+// ====================================================================================
+// 🔥 MÓDULO INTERNO: OBTENER MÚLTIPLES PRODUCTOS (Para VentasService / Carrito)
+// 👇 ¡ESTA ES LA MAGIA QUE FALTABA! Le metimos la foto desde imagenes_producto
+// ====================================================================================
+export const obtenerMultiplesProductos = async (req: Request, res: Response): Promise<void> => {
+    try {
+        const { ids } = req.body;
+
+        if (!ids || !Array.isArray(ids) || ids.length === 0) {
+            res.status(400).json({ success: false, message: 'Faltan los IDs o el formato es incorrecto' });
+            return;
+        }
+
+        const pool = await getConnection();
+        const request = pool.request();
+
+        // Armamos los placeholders dinámicos para SQL (ej. @id0, @id1, @id2)
+        const placeholders = ids.map((id, index) => {
+            request.input(`id${index}`, id);
+            return `@id${index}`;
+        }).join(', ');
+
+        // 👇 LA SUBCONSULTA MÁGICA: 
+        // Va a la tabla imagenes_producto, agarra la principal, y si por algún motivo no existe, agarra la plana.
+        // Y lo más importante: Se lo manda a React exactamente con el nombre "imagen_url".
+        const result = await request.query(`
+            SELECT 
+                p.id_producto, 
+                p.nombre, 
+                p.precio_base,
+                COALESCE(
+                    (SELECT TOP 1 imagen_url 
+                     FROM dbo.imagenes_producto 
+                     WHERE id_producto = p.id_producto AND es_principal = 1 AND deleted_at IS NULL),
+                    p.imagen_url
+                ) AS imagen_url
+            FROM dbo.productos p 
+            WHERE p.id_producto IN (${placeholders}) AND p.deleted_at IS NULL
+        `);
+
+        // Devolvemos el JSON limpio al microservicio de Ventas
+        res.status(200).json(result.recordset);
+    } catch (error) {
+        logger.error('Error al obtener múltiples productos:', error);
+        res.status(500).json({ success: false, message: 'Error al consultar productos' });
     }
 };

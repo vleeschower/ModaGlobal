@@ -1,21 +1,15 @@
 import React, { useState, useEffect, useRef } from 'react';
 import Swal from 'sweetalert2';
 import { useCart } from '../context/CartContext';
-// 👇 Importamos tu apiService para poder mandar la petición al backend
 import { apiService } from '../services/ApiService'; 
 
-// Le decimos a TypeScript que OpenPay existe globalmente gracias al index.html
 declare const OpenPay: any;
 
 const Checkout: React.FC = () => {
-  // 👇 Traemos también clearCart para vaciarlo al terminar la compra
   const { totalPrice, cart, clearCart } = useCart();
   const [loading, setLoading] = useState(false);
-  
-  // Guardaremos el ID de sesión antifraude aquí
   const deviceSessionId = useRef<string>('');
 
-  // Estados del formulario de la tarjeta
   const [tarjeta, setTarjeta] = useState({
     nombre: '',
     numero: '',
@@ -24,14 +18,10 @@ const Checkout: React.FC = () => {
     cvv: ''
   });
 
-  // Inicializamos Openpay al cargar el componente
   useEffect(() => {
-    // Tomamos las llaves de Sandbox de las variables de entorno
     OpenPay.setId(import.meta.env.VITE_OPENPAY_ID);
     OpenPay.setApiKey(import.meta.env.VITE_OPENPAY_PUBLIC_KEY);
-    OpenPay.setSandboxMode(true); // Modo Pruebas Activo
-
-    // Generamos un ID de dispositivo para el sistema antifraude
+    OpenPay.setSandboxMode(true); 
     deviceSessionId.current = OpenPay.deviceData.setup();
   }, []);
 
@@ -39,40 +29,32 @@ const Checkout: React.FC = () => {
     e.preventDefault();
     setLoading(true);
 
-    // Formateamos los datos exactamente como Openpay los exige
     const requestData = {
       "holder_name": tarjeta.nombre,
-      "card_number": tarjeta.numero.replace(/\s/g, ''), // Limpiamos espacios en blanco
+      "card_number": tarjeta.numero.replace(/\s/g, ''), 
       "expiration_month": tarjeta.mes,
-      "expiration_year": tarjeta.anio, // Solo 2 dígitos (ej. 26)
+      "expiration_year": tarjeta.anio, 
       "cvv2": tarjeta.cvv
     };
 
-    // Lanzamos la petición a los servidores de Openpay
     OpenPay.token.create(
       requestData,
       (response: any) => {
-        // 1. ¡ÉXITO! Openpay nos devuelve el Token seguro
         const tokenId = response.data.id;
         
-        console.log("🔥 TOKEN SEGURO DE OPENPAY:", tokenId);
-        
-        // 2. 🚀 AHORA SÍ: SE LO MANDAMOS A NUESTRO BACKEND PARA QUE COBRE Y GUARDE EN BD
+        // 🛒 Mandamos el ID de la sucursal (Temporalmente quemado para la prueba, luego lo harás dinámico)
         apiService.procesarPago(tokenId, deviceSessionId.current, totalPrice)
-          .then(res => {
+          .then(async (res) => {
             if (res.success) {
-              // 3. EL BACKEND RESPONDIÓ QUE YA GUARDÓ EN LA BD
               Swal.fire({
                 icon: 'success',
                 title: '¡Pago Exitoso!',
                 text: 'Tu pedido ha sido confirmado y guardado.',
-              }).then(() => {
-                 clearCart(); // Limpiamos el carrito del frontend
-                 // Opcional: Redirigimos al catálogo o a una pantalla de "Mis Pedidos"
+              }).then(async () => {
+                 await clearCart(); 
                  window.location.href = '/catalogo'; 
               });
             } else {
-              // El backend rebotó el pago (ej. error en Prisma)
               Swal.fire('Error en el servidor', res.message, 'error');
               setLoading(false);
             }
@@ -84,7 +66,6 @@ const Checkout: React.FC = () => {
           });
       },
       (error: any) => {
-        // ALGO SALIÓ MAL CON LA TARJETA EN OPENPAY (Fondos insuficientes, tarjeta inválida, etc.)
         console.error("❌ Error de Openpay:", error);
         Swal.fire('Error en la tarjeta', error.message || 'Revisa tus datos e intenta de nuevo.', 'error');
         setLoading(false);
@@ -96,78 +77,138 @@ const Checkout: React.FC = () => {
     setTarjeta({ ...tarjeta, [e.target.name]: e.target.value });
   };
 
+  // =========================================================================
+  // 🎨 AQUÍ EMPIEZA LA NUEVA UI CLÁSICA TIPO OPENPAY
+  // =========================================================================
   return (
-    <div className="max-w-md mx-auto bg-white p-8 rounded-2xl shadow-sm border border-gray-100 mt-10">
-      <div className="flex items-center justify-between mb-6">
-        <h2 className="text-xl font-black text-slate-900">Pago Seguro</h2>
-        <span className="material-symbols-outlined text-green-500">lock</span>
-      </div>
+    <div className="max-w-4xl mx-auto mt-10 bg-white shadow-md border border-gray-200">
       
-      <div className="bg-gray-50 rounded-xl p-4 mb-6 border border-gray-200">
-        <p className="text-sm text-gray-500">Total a pagar</p>
-        <p className="text-3xl font-black text-slate-900">${totalPrice.toFixed(2)}</p>
+      {/* HEADER GRIS */}
+      <div className="bg-[#f2f2f2] px-8 py-5 border-b border-gray-200">
+        <h2 className="text-2xl font-light text-gray-800">Tarjeta de crédito o débito</h2>
       </div>
-      
-      <form onSubmit={handlePagar} className="space-y-4">
-        <div>
-          <label className="text-xs font-bold text-gray-400 uppercase tracking-wider">Nombre en la tarjeta</label>
-          <input 
-            type="text" name="nombre" value={tarjeta.nombre} onChange={handleChange} required
-            className="w-full mt-1 p-3 bg-white border border-gray-200 rounded-xl focus:border-primary outline-none focus:ring-2 focus:ring-primary/20" 
-            placeholder="Ej. Rogelio Pérez"
-          />
-        </div>
 
-        <div>
-          <label className="text-xs font-bold text-gray-400 uppercase tracking-wider">Número de Tarjeta</label>
-          <input 
-            type="text" name="numero" value={tarjeta.numero} onChange={handleChange} required maxLength={19}
-            className="w-full mt-1 p-3 bg-white border border-gray-200 rounded-xl focus:border-primary outline-none focus:ring-2 focus:ring-primary/20" 
-            placeholder="4111 1111 1111 1111" // <--- ¡Tarjeta mágica de prueba!
-          />
-        </div>
-
-        <div className="grid grid-cols-3 gap-4">
-          <div>
-            <label className="text-xs font-bold text-gray-400 uppercase tracking-wider">Mes</label>
-            <input 
-              type="text" name="mes" value={tarjeta.mes} onChange={handleChange} required maxLength={2}
-              className="w-full mt-1 p-3 bg-white border border-gray-200 rounded-xl text-center focus:border-primary outline-none focus:ring-2 focus:ring-primary/20" 
-              placeholder="12"
-            />
+      <div className="p-8">
+        {/* SECCIÓN DE LOGOS DE BANCOS */}
+        <div className="flex flex-col md:flex-row gap-8 mb-8 pb-6 border-b border-gray-200">
+          <div className="flex-1">
+            <p className="text-sm text-gray-600 font-semibold mb-3">Tarjetas de crédito</p>
+            {/* Aquí puedes cambiar estos span por etiquetas <img> con los logos reales */}
+            <div className="flex gap-2 items-center text-xs font-bold text-blue-900">
+              <span className="px-2 py-1 border rounded">VISA</span>
+              <span className="px-2 py-1 border rounded text-red-600">MasterCard</span>
+              <span className="px-2 py-1 border rounded text-blue-500">AMEX</span>
+            </div>
           </div>
-          <div>
-            <label className="text-xs font-bold text-gray-400 uppercase tracking-wider">Año</label>
-            <input 
-              type="text" name="anio" value={tarjeta.anio} onChange={handleChange} required maxLength={2}
-              className="w-full mt-1 p-3 bg-white border border-gray-200 rounded-xl text-center focus:border-primary outline-none focus:ring-2 focus:ring-primary/20" 
-              placeholder="28"
-            />
-          </div>
-          <div>
-            <label className="text-xs font-bold text-gray-400 uppercase tracking-wider">CVV</label>
-            <input 
-              type="text" name="cvv" value={tarjeta.cvv} onChange={handleChange} required maxLength={4}
-              className="w-full mt-1 p-3 bg-white border border-gray-200 rounded-xl text-center focus:border-primary outline-none focus:ring-2 focus:ring-primary/20" 
-              placeholder="123"
-            />
+          <div className="hidden md:block w-px bg-gray-300"></div>
+          <div className="flex-[2]">
+            <p className="text-sm text-gray-600 font-semibold mb-3">Tarjetas de débito</p>
+            <div className="flex flex-wrap gap-3 items-center text-xs font-bold text-gray-700">
+              <span className="px-2 py-1 border rounded text-blue-800">BBVA</span>
+              <span className="px-2 py-1 border rounded text-red-600">Santander</span>
+              <span className="px-2 py-1 border rounded">HSBC</span>
+              <span className="px-2 py-1 border rounded text-red-500">Scotiabank</span>
+              <span className="px-2 py-1 border rounded text-green-700">Inbursa</span>
+            </div>
           </div>
         </div>
 
-        <button 
-          type="submit" 
-          disabled={loading || cart.length === 0}
-          className={`w-full py-4 rounded-xl font-bold transition-all shadow-lg mt-6 flex items-center justify-center gap-2
-            ${loading || cart.length === 0 ? 'bg-gray-300 text-gray-500 cursor-not-allowed' : 'bg-slate-900 text-white hover:bg-primary-esmeralda active:scale-95'}`}
-        >
-          {loading ? (
-            'Validando pago en servidor...'
-          ) : (
-            <>Pagar ${totalPrice.toFixed(2)}</>
-          )}
-        </button>
-        <p className="text-center text-xs text-gray-400 mt-4">Transacción encriptada por Openpay México</p>
-      </form>
+        {/* FORMULARIO A DOS COLUMNAS */}
+        <form onSubmit={handlePagar} className="space-y-6">
+          
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+            {/* Nombre */}
+            <div>
+              <label className="block text-lg text-gray-700 font-light mb-2">Nombre del titular</label>
+              <input 
+                type="text" name="nombre" value={tarjeta.nombre} onChange={handleChange} required
+                className="w-full p-2 border border-gray-300 rounded-sm outline-none focus:border-blue-500 text-gray-600 placeholder-gray-400 italic" 
+                placeholder="Como aparece en la tarjeta"
+              />
+            </div>
+
+            {/* Número */}
+            <div>
+              <label className="block text-lg text-gray-700 font-light mb-2">Número de tarjeta</label>
+              <input 
+                type="text" name="numero" value={tarjeta.numero} onChange={handleChange} required maxLength={19}
+                className="w-full p-2 border border-gray-300 rounded-sm outline-none focus:border-blue-500 text-gray-700 tracking-wider" 
+                placeholder="•••• •••• •••• ••••" 
+              />
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+            {/* Fecha */}
+            <div>
+              <label className="block text-lg text-gray-700 font-light mb-2">Fecha de expiración</label>
+              <div className="flex gap-4">
+                <input 
+                  type="text" name="mes" value={tarjeta.mes} onChange={handleChange} required maxLength={2}
+                  className="w-full p-2 border border-gray-300 rounded-sm outline-none focus:border-blue-500 text-gray-600 placeholder-gray-400 italic" 
+                  placeholder="Mes"
+                />
+                <input 
+                  type="text" name="anio" value={tarjeta.anio} onChange={handleChange} required maxLength={2}
+                  className="w-full p-2 border border-gray-300 rounded-sm outline-none focus:border-blue-500 text-gray-600 placeholder-gray-400 italic" 
+                  placeholder="Año"
+                />
+              </div>
+            </div>
+
+            {/* CVV */}
+            <div>
+              <label className="block text-lg text-gray-700 font-light mb-2">Código de seguridad</label>
+              <div className="flex items-center gap-4">
+                <input 
+                  type="text" name="cvv" value={tarjeta.cvv} onChange={handleChange} required maxLength={4}
+                  className="w-32 p-2 border border-gray-300 rounded-sm outline-none focus:border-blue-500 text-gray-600 placeholder-gray-400 italic" 
+                  placeholder="3 dígitos"
+                />
+                {/* Iconos simulados de tarjeta para el CVV */}
+                <div className="hidden sm:flex gap-2 opacity-50">
+                  <div className="w-12 h-8 bg-gray-300 rounded border border-gray-400 flex items-center justify-end px-1">
+                     <span className="w-4 h-1 bg-gray-500 rounded-full"></span>
+                  </div>
+                  <div className="w-12 h-8 bg-gray-300 rounded border border-gray-400 flex items-start justify-end p-1">
+                     <span className="w-2 h-2 bg-gray-500 rounded-full"></span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* FOOTER OPENPAY Y BOTÓN */}
+          <div className="flex flex-col md:flex-row justify-between items-center mt-10 pt-6 border-t border-gray-200">
+            
+            {/* Logos de seguridad */}
+            <div className="flex items-center gap-6 mb-4 md:mb-0">
+              <div className="text-center">
+                <p className="text-[10px] text-gray-500 uppercase tracking-wide">Transacciones realizadas vía:</p>
+                <p className="text-xl font-bold text-[#00a1e0]">Openpay</p>
+              </div>
+              <div className="w-px h-8 bg-gray-300"></div>
+              <div className="flex items-center gap-2 text-sm text-gray-600">
+                <span className="material-symbols-outlined text-green-600 text-2xl">verified_user</span>
+                <p className="leading-tight text-xs">Tus pagos se realizan de forma segura<br/>con encriptación de 256 bits</p>
+              </div>
+            </div>
+
+            {/* Botón Pagar */}
+            <button 
+              type="submit" 
+              disabled={loading || cart.length === 0}
+              className={`px-10 py-2 text-lg rounded shadow-sm transition-all
+                ${loading || cart.length === 0 
+                  ? 'bg-gray-300 text-gray-500 cursor-not-allowed' 
+                  : 'bg-[#b32121] hover:bg-[#8f1919] text-white font-semibold'}`}
+            >
+              {loading ? 'Procesando...' : `Pagar $${totalPrice.toFixed(2)}`}
+            </button>
+          </div>
+
+        </form>
+      </div>
     </div>
   );
 };

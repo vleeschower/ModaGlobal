@@ -13,7 +13,8 @@ import {
     vincularProveedor,
     crearProducto, 
     actualizarProducto,
-    eliminarProducto
+    eliminarProducto,
+    obtenerMultiplesProductos // 👈 AÑADIDO: La nueva función
 } from '../controllers/ProductoController';
 import { verificarApiKey, verificarAccesoInterno, verificarRol } from '../middlewares/Security';
 import { upload } from '../config/Cloudinary';
@@ -33,6 +34,9 @@ router.get('/categorias', obtenerCategorias);
 router.get('/ofertas', obtenerPromocionesPublicas);
 router.get('/:id', obtenerProductoPorId);
 router.get('/:id/resenas', obtenerResenas);
+
+// 👈 NUEVO: RUTA PARA EL CRUCE DE MICROSERVICIOS (VENTAS)
+router.post('/detalles-multiples', obtenerMultiplesProductos); 
 
 // ==========================================
 // 3. BARRERA DE SESIÓN (De aquí hacia abajo, EXIGEN estar logueado)

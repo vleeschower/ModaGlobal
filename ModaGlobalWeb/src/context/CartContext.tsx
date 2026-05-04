@@ -12,7 +12,7 @@ interface CartItem {
 
 interface CartContextType {
   cart: CartItem[];
-  addToCart: (producto: Producto, cantidad: number) => void;
+  addToCart: (producto: any, cantidad?: number) => void;
   removeFromCart: (productoId: string) => void;
   updateQuantity: (productoId: string, cantidad: number) => void;
   clearCart: () => void;
@@ -63,7 +63,6 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
       const itemsNuevosParaLaDB = cart.filter(localItem => {
         const localId = localItem.producto?.id_producto || (localItem as any).id_producto;
         const existeEnDB = dbItems.some((dbItem: any) => dbItem.id_producto === localId);
-        // Solo conservamos los que NO están en la DB
         return !existeEnDB;
       });
 
@@ -76,7 +75,7 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
           aplicarDatosDBalFrontend(finalRes.data);
         }
       } else {
-        // 4. Si no hay nada nuevo (F5 normal), simplemente copiamos las cantidades de la DB al frontend
+        // 4. Si no hay nada nuevo, copiamos las cantidades de la DB al frontend
         aplicarDatosDBalFrontend(dbItems);
       }
 
@@ -88,10 +87,10 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
-  // Función para re-armar el carrito usando los datos de la DB pero rescatando las fotos locales
+  // 👇 AQUÍ ESTÁ LA ASPIRADORA DE FANTASMAS 👇
   const aplicarDatosDBalFrontend = (dbItems: any[]) => {
     setCart(prevCart => {
-      // Guardamos las fotos y precios que ya tenemos en memoria
+      // Guardamos las fotos y precios que ya tenemos en memoria por si acaso
       const infoMap = new Map();
       prevCart.forEach(item => {
         const id = item.producto?.id_producto || (item as any).id_producto;
@@ -100,43 +99,74 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
         }
       });
 
-      // Armamos el carrito exacto sin sumar nada, copiando exactamente la cantidad de la DB
-      const cleanCart: CartItem[] = dbItems.map((dbItem: any) => ({
-        producto: infoMap.get(dbItem.id_producto) || { id_producto: dbItem.id_producto } as Producto,
-        cantidad: dbItem.cantidad
-      }));
+      // Usamos un MAP para asegurar que NUNCA haya IDs repetidos en pantalla
+      const carritoLimpio = new Map<string, CartItem>();
 
-      return cleanCart;
+      dbItems.forEach((dbItem: any) => {
+        const prodId = dbItem.id_producto;
+        // Priorizamos el producto de la DB (el que trae la foto arreglada), si no el local.
+        const prodReal = dbItem.producto || infoMap.get(prodId) || { id_producto: prodId };
+
+        if (carritoLimpio.has(prodId)) {
+          // 👻 ¡FANTASMA DETECTADO! Si la BD mandó este ID 2 veces, lo fusionamos
+          const existente = carritoLimpio.get(prodId)!;
+          existente.cantidad += dbItem.cantidad;
+        } else {
+          // Si es la primera vez que lo vemos, lo metemos limpio
+          carritoLimpio.set(prodId, {
+            producto: prodReal as Producto,
+            cantidad: dbItem.cantidad
+          });
+        }
+      });
+
+      // Convertimos el Map de regreso a un arreglo para React
+      return Array.from(carritoLimpio.values());
     });
   };
   // ==============================================================
 
-  const addToCart = async (producto: Producto, cantidad: number) => {
-    const productId = producto.id_producto;
-    const existingItem = cart.find(item => 
-      (item.producto?.id_producto || (item as any).id_producto) === productId
-    );
-    
-    const nuevaCantidad = existingItem ? existingItem.cantidad + cantidad : cantidad;
+  // ==============================================================
+  // 🛒 AGREGAR AL CARRITO (Visualmente suma en vez de duplicar)
+  // ==============================================================
+  const addToCart = async (productoNuevo: any, cantidadAgregada: number = 1) => {
+    const idNuevo = productoNuevo?.id_producto;
+    if (!idNuevo) return; // Candado de seguridad
 
-    if (isAuthenticated) {
-      try {
-        await apiService.upsertCarritoItem(productId, nuevaCantidad);
-      } catch (error) { console.error(error); }
-    }
+    // 1. Actualizamos el estado visual de React primero
+    setCart((prevCart: any[]) => {
+      const existe = prevCart.find(
+        (item: any) => (item.producto?.id_producto || item.id_producto) === idNuevo
+      );
 
-    setCart(prevCart => {
-      if (existingItem) {
-        return prevCart.map(item => 
-          (item.producto?.id_producto || (item as any).id_producto) === productId 
-            ? { ...item, cantidad: nuevaCantidad }
+      if (existe) {
+        // Si ya existe, SOLO le sumamos la cantidad al que coincide
+        return prevCart.map((item: any) =>
+          (item.producto?.id_producto || item.id_producto) === idNuevo
+            ? { ...item, cantidad: item.cantidad + cantidadAgregada }
             : item
         );
+      } else {
+        // Si es nuevo, lo metemos al final del arreglo
+        return [
+          ...prevCart,
+          {
+            id_producto: idNuevo,
+            cantidad: cantidadAgregada,
+            producto: productoNuevo
+          }
+        ];
       }
-      return [...prevCart, { producto, cantidad }];
     });
-    showToast('Agregado al carrito');
+
+    // 2. Lo mandamos al backend si el usuario está logueado
+    if (isAuthenticated) {
+      await apiService.upsertCarritoItem(idNuevo, cantidadAgregada);
+    }
+
+    showToast('Producto agregado al carrito');
   };
+  // ==============================================================
 
   const removeFromCart = async (productoId: string) => {
     if (isAuthenticated) await apiService.removeFromCarrito(productoId);
@@ -147,7 +177,8 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const updateQuantity = async (productoId: string, cantidad: number) => {
     if (cantidad < 1) return;
-    if (isAuthenticated) await apiService.upsertCarritoItem(productoId, cantidad);
+    if (isAuthenticated) await apiService.upsertCarritoItem(productoId, Math.abs(cantidad - cart.find(i => (i.producto?.id_producto || (i as any).id_producto) === productoId)?.cantidad!)); // Envía solo la diferencia o maneja la lógica según tu API
+    // (Nota: Si tu backend 'upsert' espera la cantidad a SUMAR, usa la diferencia. Si espera el total, usa 'cantidad').
     
     setCart(prevCart => prevCart.map(item => 
       (item.producto?.id_producto || (item as any).id_producto) === productoId 
@@ -159,6 +190,7 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const clearCart = async () => {
     if (isAuthenticated) await apiService.clearCarritoDB();
     setCart([]);
+    localStorage.removeItem('mg_cart'); 
   };
 
   const showToast = (title: string) => {
@@ -171,7 +203,7 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const totalItems = cart.reduce((total, item) => total + (item.cantidad || 0), 0);
   const totalPrice = cart.reduce((total, item) => 
-    total + (Number(item.producto?.precio_base || 0) * (item.cantidad || 0)), 
+    total + (Number(item.producto?.precio_base || item.producto?.precio_base || 0) * (item.cantidad || 0)), 
   0);
 
   return (
