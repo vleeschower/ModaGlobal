@@ -40,6 +40,19 @@ export const userService = {
         body: JSON.stringify({ email, password }),
       });
 
+      // ✨ BLINDAJE: Si el servidor da un error 500, 504 o 404
+      if (!response.ok) {
+          // Leemos la respuesta como texto por si es un HTML del Gateway (como el 504)
+          const errorText = await response.text(); 
+          console.error(`[UserService] El servidor respondió con error ${response.status}:`, errorText);
+          
+          if (response.status === 504) {
+              return { success: false, message: 'El servicio de usuarios está tardando en responder. Intenta de nuevo más tarde.' };
+          }
+          return { success: false, message: `Error del servidor (${response.status}).` };
+      }
+
+      // Si llegó hasta aquí, es seguro que la respuesta es un JSON válido
       const data: AuthResponse = await response.json();
 
       if (data.success && data.token && data.user) {
@@ -49,8 +62,8 @@ export const userService = {
 
       return data;
     } catch (error) {
-      console.error('[UserService] Error en login:', error);
-      return { success: false, message: 'Error de conexión con el servidor.' };
+      console.error('[UserService] Error en login (Red o CORS):', error);
+      return { success: false, message: 'No hay conexión con el servidor. Verifica tu internet o si el API está encendido.' };
     }
   },
 

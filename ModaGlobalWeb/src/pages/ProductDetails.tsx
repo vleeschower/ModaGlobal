@@ -217,35 +217,43 @@ const ProductDetails: React.FC = () => {
                       </button>
                   </div>
               ) : (
-                  <div className="flex items-center gap-6">
-                      <div className="flex items-center border border-gray-200 rounded-xl overflow-hidden bg-gray-50 h-14">
-                        <button onClick={() => setQuantity(q => Math.max(1, q-1))} className="px-5 h-full hover:bg-gray-200 transition-colors font-bold">-</button>
-                        <span className="px-6 font-bold text-slate-900 w-12 text-center">{quantity}</span>
-                        {/* Evitamos que el usuario pida más del stock físico que hay en tienda */}
-                        <button onClick={() => setQuantity(q => Math.min(product.stock_local || 1, q+1))} className="px-5 h-full hover:bg-gray-200 transition-colors font-bold">+</button>
-                      </div>
+                  <div className="flex flex-col gap-4">
                       
-                      {/* ✨ BOTÓN DE ROGELIO CON TU ESTILO */}
-                      <button 
-                        onClick={() => addToCart(product, quantity)}
-                        className="flex-1 h-14 bg-slate-900 text-white rounded-2xl font-bold hover:bg-emerald-500 transition-all shadow-xl shadow-slate-900/10 flex items-center justify-center gap-3 active:scale-95"
-                      >
-                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-5 h-5">
-                          <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 3h1.386c.51 0 .955.343 1.087.835l.383 1.437M7.5 14.25a3 3 0 0 0-3 3h15.75m-12.75-3h11.218c1.121-2.3 2.1-4.684 2.924-7.138a60.114 60.114 0 0 0-16.536-1.84M7.5 14.25 5.106 5.272M6 20.25a.75.75 0 1 1-1.5 0 .75.75 0 0 1 1.5 0Zm12.75 0a.75.75 0 1 1-1.5 0 .75.75 0 0 1 1.5 0Z" />
-                        </svg>
-                        Añadir al carrito
-                      </button>
+                      {/* ✨ NUEVO: INDICADOR VISUAL PERMANENTE DE STOCK */}
+                      <div className="flex items-center gap-2 bg-gray-50 border border-gray-200 w-fit px-3 py-1.5 rounded-lg">
+                          <span className={`flex items-center justify-center w-2.5 h-2.5 rounded-full ${product.stock_local <= 5 ? 'bg-amber-500 animate-pulse' : 'bg-emerald-500'}`}></span>
+                          <span className="text-sm font-bold text-slate-700">
+                              Stock disponible: <span className={product.stock_local <= 5 ? 'text-amber-600' : 'text-emerald-600'}>{product.stock_local} unidades</span>
+                          </span>
+                      </div>
+
+                      <div className="flex items-center gap-6">
+                          <div className="flex items-center border border-gray-200 rounded-xl overflow-hidden bg-white h-14 shadow-sm">
+                            <button onClick={() => setQuantity(q => Math.max(1, q-1))} className="px-5 h-full hover:bg-gray-100 transition-colors font-bold text-slate-600">-</button>
+                            <span className="px-6 font-bold text-slate-900 w-12 text-center">{quantity}</span>
+                            <button onClick={() => setQuantity(q => Math.min(product.stock_local || 1, q+1))} className="px-5 h-full hover:bg-gray-100 transition-colors font-bold text-slate-600">+</button>
+                          </div>
+                          
+                          <button 
+                            onClick={() => addToCart(product, quantity)}
+                            className="flex-1 h-14 bg-slate-900 text-white rounded-2xl font-bold hover:bg-emerald-500 transition-all shadow-xl shadow-slate-900/10 flex items-center justify-center gap-3 active:scale-95"
+                          >
+                            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-5 h-5">
+                              <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 3h1.386c.51 0 .955.343 1.087.835l.383 1.437M7.5 14.25a3 3 0 0 0-3 3h15.75m-12.75-3h11.218c1.121-2.3 2.1-4.684 2.924-7.138a60.114 60.114 0 0 0-16.536-1.84M7.5 14.25 5.106 5.272M6 20.25a.75.75 0 1 1-1.5 0 .75.75 0 0 1 1.5 0Zm12.75 0a.75.75 0 1 1-1.5 0 .75.75 0 0 1 1.5 0Z" />
+                            </svg>
+                            Añadir al carrito
+                          </button>
+                      </div>
+
+                      {/* Aviso extra de urgencia si quedan 5 o menos (Opcional, pero da buen UX) */}
+                      {(product.stock_local <= 5) && (
+                          <p className="text-amber-600 text-xs font-bold flex items-center gap-1 mt-1">
+                              <span className="material-symbols-outlined text-[14px]">warning</span>
+                              ¡Últimas unidades! Podrían agotarse pronto.
+                          </p>
+                      )}
                   </div>
               )}
-              
-              {/* Aviso extra de stock limitado */}
-              {(product.stock_local && product.stock_local > 0 && product.stock_local <= 5) && (
-                  <p className="text-amber-600 text-sm font-bold flex items-center gap-1">
-                      <span className="material-symbols-outlined text-[16px]">warning</span>
-                      ¡Date prisa! Solo quedan {product.stock_local} unidades en tu sucursal.
-                  </p>
-              )}
-
             </div>
           </div>
         </div>

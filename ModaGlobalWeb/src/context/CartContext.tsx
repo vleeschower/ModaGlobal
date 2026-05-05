@@ -1,13 +1,14 @@
 // src/context/CartContext.tsx
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext, useState, useEffect, useRef } from 'react';
 import { type Producto } from '../types/Producto';
-import { useAuth } from './AuthContext'; // Importamos el contexto de autenticación
-import { apiService } from '../services/ApiService'; // Asumiendo que aquí pondrás las llamadas
+import { useAuth } from './AuthContext'; 
+import { apiService } from '../services/ApiService'; 
 import Swal from 'sweetalert2';
 
 interface CartItem {
   producto: Producto;
   cantidad: number;
+  stock_local: number; 
 }
 
 interface CartContextType {
@@ -24,104 +25,149 @@ interface CartContextType {
 const CartContext = createContext<CartContextType | undefined>(undefined);
 
 export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const { isAuthenticated, user } = useAuth();
+  const { isAuthenticated } = useAuth();
   const [loading, setLoading] = useState(false);
-  const [cart, setCart] = useState<CartItem[]>(() => {
-    const savedCart = localStorage.getItem('mg_cart');
-    return savedCart ? JSON.parse(savedCart) : [];
-  });
+  const isSyncing = useRef(false);
+  const hasLoadedInitial = useRef(false); 
+  
+  const [cart, setCart] = useState<CartItem[]>([]);
 
-  // 1. Efecto para persistencia local (siempre corre)
+  // 1. INICIALIZACIÓN Y CAMBIOS DE SESIÓN (LOGIN / LOGOUT)
   useEffect(() => {
-    localStorage.setItem('mg_cart', JSON.stringify(cart));
-  }, [cart]);
-
-  // 2. Efecto de Sincronización: Cuando el usuario se loguea
-  useEffect(() => {
-    if (isAuthenticated && user) {
+    if (isAuthenticated) {
+      // 🟢 Acaba de loguearse o recargar la página logueado
       syncLocalCartToDB();
+    } else {
+      if (hasLoadedInitial.current) {
+        // 🔴 ACABA DE CERRAR SESIÓN: Limpiamos absolutamente todo al instante
+        setCart([]);
+        localStorage.removeItem('mg_cart');
+        isSyncing.current = false;
+      } else {
+        // 🟡 PRIMERA CARGA COMO INVITADO: Leemos de localStorage
+        const savedCart = localStorage.getItem('mg_cart');
+        if (savedCart) setCart(JSON.parse(savedCart));
+      }
     }
+    hasLoadedInitial.current = true;
+  }, [isAuthenticated]);
+
+  // 2. PERSISTENCIA EN TIEMPO REAL (Solo para invitados)
+  useEffect(() => {
+    // Solo guardamos si no está logueado y ya pasó la carga inicial
+    if (!isAuthenticated && hasLoadedInitial.current) {
+      localStorage.setItem('mg_cart', JSON.stringify(cart));
+    }
+  }, [cart, isAuthenticated]);
+
+  // 3. CAMBIO DE SUCURSAL
+  useEffect(() => {
+    const handleStorageChange = (e: StorageEvent) => {
+        if (e.key === 'mg_tienda_seleccionada') {
+            loadCartFromDB(); // Actualiza precios y stock de todos los items
+        }
+    };
+    window.addEventListener('storage', handleStorageChange);
+    return () => window.removeEventListener('storage', handleStorageChange);
   }, [isAuthenticated]);
 
   const syncLocalCartToDB = async () => {
-    if (cart.length === 0) {
-      // Si no hay nada local, traemos lo que ya tenga en la DB
-      loadCartFromDB();
-      return;
-    }
-    
+    if (isSyncing.current) return;
+    isSyncing.current = true;
     setLoading(true);
+
     try {
-      // Mandamos los productos locales a la tabla 'Carrito'
-      // Tu API de VentasService debería tener un endpoint de "bulk insert" o "sync"
-      await apiService.syncCarrito(cart);
-      localStorage.removeItem('mg_cart'); // ELIMINAMOS LA MEMORIA LOCAL
-      setCart([]); // Vaciamos el estado actual antes de cargar la nube para evitar superposiciones
+      const localData = localStorage.getItem('mg_cart');
+      const guestItems = localData ? JSON.parse(localData) : [];
+
+      if (guestItems.length > 0) {
+        await apiService.syncCarrito(guestItems);
+        localStorage.removeItem('mg_cart'); 
+      }
       await loadCartFromDB();
     } catch (error) {
-      console.error("Error al sincronizar carrito:", error);
+      console.error("Error en sincronización:", error);
     } finally {
+      isSyncing.current = false;
       setLoading(false);
     }
   };
 
   const loadCartFromDB = async () => {
-      try {
-        // 1. Pedimos los items básicos al microservicio del carrito
-        const res = await apiService.getCarrito();
+    setLoading(true);
+    try {
+        let itemsParaHidratar = [];
 
-        if (res.success && res.data && res.data.length > 0) {
-          
-          // 🚀 2. HIDRATACIÓN OMNICANAL: Consultamos los detalles al microservicio de productos
-          const cartPromises = res.data.map(async (item: any) => {
-            // Usamos tu servicio existente que ya inyecta el header 'x-tienda-cercana'
-            const prodRes = await apiService.getProductoById(item.id_producto);
-
-            if (prodRes.success && prodRes.data) {
-              return {
-                producto: prodRes.data, // Aquí viene todo: nombre, precio, descuentos, imágenes
-                cantidad: item.cantidad
-              };
-            }
-            return null; // Si el producto fue eliminado del catálogo maestro, lo ignoramos
-          });
-
-          // 3. Esperamos a que todas las peticiones terminen
-          const cartHidratado = await Promise.all(cartPromises);
-
-          // 4. Filtramos los nulos y actualizamos el estado
-          setCart(cartHidratado.filter(item => item !== null) as CartItem[]);
+        if (isAuthenticated) {
+            const res = await apiService.getCarrito();
+            if (res.success && res.data) itemsParaHidratar = res.data;
         } else {
-          setCart([]); // Carrito vacío
+            // Para invitados, leemos lo que hay en el estado local actual o localStorage
+            const savedCart = localStorage.getItem('mg_cart');
+            if (savedCart) {
+                const localItems = JSON.parse(savedCart);
+                // Convertimos el formato CartItem[] al formato plano de la DB para procesar igual
+                itemsParaHidratar = localItems.map((i: CartItem) => ({ 
+                    id_producto: i.producto.id_producto, 
+                    cantidad: i.cantidad 
+                }));
+            }
         }
-      } catch (error) {
-        console.error("Error al cargar carrito de DB:", error);
-      }
+
+        if (itemsParaHidratar.length > 0) {
+            const ids = itemsParaHidratar.map((item: any) => item.id_producto);
+            const prodsRes = await apiService.getProductosBatch(ids);
+
+            if (prodsRes.success && prodsRes.data) {
+                const cartHidratado = itemsParaHidratar.map((item: any) => {
+                    const infoProducto = prodsRes.data?.find(p => p.id_producto === item.id_producto);
+                    if (infoProducto) {
+                        const stockDisponible = infoProducto.stock_local ?? 0;
+                        const cantidadSolicitada = item.cantidad; 
+
+                        // Ya no modificamos 'cantidadFinal' hacia abajo, ni hacemos upsert a la BD.
+                        // Mantenemos lo que el usuario pidió en el estado del carrito.
+                        return { 
+                            producto: infoProducto, 
+                            cantidad: cantidadSolicitada, // Se queda con el 5 aunque haya 0
+                            stock_local: stockDisponible  // El componente Cart se encargará de comparar
+                        };
+                    }
+                    return null;
+                }).filter((item: CartItem | null): item is CartItem => item !== null);
+
+                setCart(cartHidratado);
+            }
+        } else {
+            setCart([]);
+        }
+    } catch (error) {
+        console.error("Error al cargar carrito:", error);
+    } finally {
+        setLoading(false);
+    }
   };
 
   const addToCart = async (producto: Producto, cantidad: number) => {
       const existingItem = cart.find(item => item.producto.id_producto === producto.id_producto);
       const nuevaCantidad = existingItem ? existingItem.cantidad + cantidad : cantidad;
+      const stockDisponible = producto.stock_local ?? 0;
 
-      // 1. VALIDACIÓN FÍSICA: No vender humo
-      if (producto.stock_local !== undefined && nuevaCantidad > producto.stock_local) {
-          showToast(`Stock insuficiente. Solo quedan ${producto.stock_local} unidades.`);
-          return; // Cortocircuito: No seguimos si no hay stock
+      if (nuevaCantidad > stockDisponible) {
+          showToast(`Stock insuficiente. Solo quedan ${stockDisponible} unidades.`);
+          return;
       }
 
-      // 2. OPTIMISMO CORREGIDO: Validar con la nube primero
       if (isAuthenticated) {
         try {
           const res = await apiService.upsertCarritoItem(producto.id_producto, nuevaCantidad);
-          if (!res.success) throw new Error(res.message); // Forzamos el catch si la API responde con un {success: false}
+          if (!res.success) throw new Error(res.message);
         } catch (error) {
-          console.error("No se pudo guardar en DB", error);
           showToast('Error de conexión. Intenta de nuevo.');
-          return; // Cortocircuito: Si la base de datos falla, NO actualizamos el front
+          return;
         }
       }
 
-      // 3. ACTUALIZACIÓN LOCAL (Solo si pasamos todos los filtros)
       setCart(prevCart => {
         if (existingItem) {
           return prevCart.map(item => 
@@ -130,50 +176,46 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
               : item
           );
         }
-        return [...prevCart, { producto, cantidad }];
+        // Se agrega el campo stock_local para cumplir con la interfaz
+        return [...prevCart, { producto, cantidad, stock_local: stockDisponible }];
       });
-
       showToast('Agregado al carrito');
-  };
-
-  const removeFromCart = async (productoId: string) => {
-    if (isAuthenticated) {
-      await apiService.removeFromCarrito(productoId);
-    }
-    setCart(prevCart => prevCart.filter(item => item.producto.id_producto !== productoId));
   };
 
   const updateQuantity = async (productoId: string, cantidad: number) => {
       if (cantidad < 1) return;
-
-      // 1. Validar el stock antes de sumar
       const itemToUpdate = cart.find(item => item.producto.id_producto === productoId);
-      if (itemToUpdate && itemToUpdate.producto.stock_local !== undefined && cantidad > itemToUpdate.producto.stock_local) {
-          showToast(`Límite de stock alcanzado (${itemToUpdate.producto.stock_local} uds).`);
-          return;
-      }
-
-      // 2. Esperar respuesta de la nube
-      if (isAuthenticated) {
-          try {
-              const res = await apiService.upsertCarritoItem(productoId, cantidad);
-              if (!res.success) throw new Error(res.message);
-          } catch (error) {
-              showToast('Error al actualizar la cantidad.');
+      
+      if (itemToUpdate) {
+          const stockDisponible = itemToUpdate.producto.stock_local ?? 0;
+          if (cantidad > stockDisponible) {
+              showToast(`Límite de stock alcanzado.`);
               return;
           }
-      }
 
-      // 3. Actualizar
-      setCart(prevCart => prevCart.map(item => 
-        item.producto.id_producto === productoId ? { ...item, cantidad } : item
-      ));
+          if (isAuthenticated) {
+              try {
+                  const res = await apiService.upsertCarritoItem(productoId, cantidad);
+                  if (!res.success) throw new Error(res.message);
+              } catch (error) {
+                  showToast('Error al actualizar la cantidad.');
+                  return;
+              }
+          }
+
+          setCart(prevCart => prevCart.map(item => 
+            item.producto.id_producto === productoId ? { ...item, cantidad } : item
+          ));
+      }
+  };
+
+  const removeFromCart = async (productoId: string) => {
+    if (isAuthenticated) await apiService.removeFromCarrito(productoId);
+    setCart(prevCart => prevCart.filter(item => item.producto.id_producto !== productoId));
   };
 
   const clearCart = async () => {
-    if (isAuthenticated) {
-      await apiService.clearCarritoDB();
-    }
+    if (isAuthenticated) await apiService.clearCarritoDB();
     setCart([]);
   };
 
@@ -191,16 +233,15 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
     });
   };
 
+// ✨ BLINDAJE EN EL CÁLCULO TOTAL
   const totalItems = cart.reduce((total, item) => total + item.cantidad, 0);
   const totalPrice = cart.reduce((total, item) => {
-      const precioBase = Number(item.producto.precio_base);
-      // Calculamos el descuento si existe
-      const descuento = item.producto.descuento_local 
-          ? precioBase * (item.producto.descuento_local / 100) 
-          : 0;
+      const precioBase = Number(item.producto.precio_base || 0);
+      // Buscamos el descuento bajo ambos nombres para evitar fallos
+      const porcentajeDesc = Number(item.producto.descuento_local || (item.producto as any).descuento || 0); 
+      const descuentoAplicado = precioBase * (porcentajeDesc / 100);
       
-      // Total = (Precio - Descuento) * Cantidad
-      return total + ((precioBase - descuento) * item.cantidad);
+      return total + ((precioBase - descuentoAplicado) * item.cantidad);
   }, 0);
 
   return (

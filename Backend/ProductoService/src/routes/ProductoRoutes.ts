@@ -9,12 +9,12 @@ import {
     obtenerProductosAdmin,        
     obtenerPromocionesAdmin,
     guardarPromocion,
-    crearPromocion,
     vincularProveedor,
     crearProducto, 
     actualizarProducto,
     eliminarProducto,
-    obtenerInventarioRed
+    obtenerInventarioRed,
+    obtenerProductosPorListaIds
 } from '../controllers/ProductoController';
 import { verificarApiKey, verificarAccesoInterno, verificarRol } from '../middlewares/Security';
 import { upload } from '../config/Cloudinary';
@@ -30,6 +30,7 @@ router.use(verificarApiKey); // ✅ ESTA ES LA CLAVE PARA PERMITIR INVITADOS
 // 2. RUTAS PÚBLICAS (Lectura para Clientes/Invitados)
 // ==========================================
 router.get('/', obtenerProductos);
+router.post('/batch', obtenerProductosPorListaIds); // Nueva ruta para obtener productos por lista de IDs (ej: carrito)
 router.get('/categorias', obtenerCategorias);
 router.get('/ofertas', obtenerPromocionesPublicas);
 router.get('/:id', obtenerProductoPorId);
@@ -55,7 +56,7 @@ router.get('/inventario/red', verificarRol(['Administrador', 'SuperAdministrador
 
 // Operaciones de Sucursal
 router.post('/promociones/admin/guardar', verificarRol(['Administrador', 'SuperAdministrador']), guardarPromocion);
-router.post('/promociones', verificarRol(['Administrador', 'SuperAdministrador']), crearPromocion);
+
 router.post('/proveedores/vincular', verificarRol(['Administrador', 'SuperAdministrador']), vincularProveedor);
 
 // Operaciones Maestras de Catálogo

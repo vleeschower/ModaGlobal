@@ -6,6 +6,7 @@ import { useCart } from '../context/CartContext';
 
 const Cart: React.FC = () => {
   const { cart, updateQuantity, removeFromCart, totalPrice, totalItems } = useCart();
+  const carritoTieneErrores = cart.some(item => item.cantidad > (item.stock_local || 0));
 
   return (
     <div className="bg-[#F8F9FA] min-h-screen flex flex-col font-sans">
@@ -45,71 +46,101 @@ const Cart: React.FC = () => {
 
               <div className="divide-y divide-gray-100">
                 {cart.map((item, index) => {
-                  // --- LÓGICA DE BLINDAJE PARA DATOS DE MICROSERVICIOS ---
-                  // 1. Extraemos el ID sin importar si viene plano o anidado
                   const productId = item.producto?.id_producto || (item as any).id_producto || `temp-id-${index}`;
-                  
-                  // 2. Forzamos a que 'prod' sea al menos un objeto vacío para que no truene el render
                   const prod = item.producto || {} as any;
                   
-                  // 3. Variables seguras con valores por defecto (DummyImage es más estable que Placeholder)
                   const imagenSegura = prod.imagen_url || 'https://dummyimage.com/150x150/f3f4f6/a1a1aa.png&text=Sin+Imagen';
                   const nombreSeguro = prod.nombre || 'Cargando producto...';
                   const categoriaSegura = prod.id_categoria || 'General';
-                  const precioSeguro = Number(prod.precio_base || 0);
+                  const precioBase = Number(prod.precio_base || 0);
+                  const descuento = Number(prod.descuento_local || 0);
+
+                  const precioUnitarioReal = precioBase * (1 - descuento / 100);
+                  const subtotalFila = precioUnitarioReal * item.cantidad;
+
+                  const stockDisponible = item.stock_local || 0;
+                  const hayConflictoStock = item.cantidad > stockDisponible;
 
                   return (
-                    <div key={productId} className="py-6 grid grid-cols-1 md:grid-cols-12 gap-4 items-center">
+                    <div key={productId} className={`py-6 grid grid-cols-1 md:grid-cols-12 gap-4 items-center relative transition-opacity ${stockDisponible === 0 ? 'opacity-80' : ''}`}>
                       
-                      {/* Imagen y Nombre */}
+                      {/* ✨ ALERTA DE STOCK MEJORADA (Ocupa todo el ancho superior) */}
+                      {hayConflictoStock && (
+                        <div className="col-span-full mb-1">
+                          <div className="flex items-start md:items-center gap-3 px-4 py-3 bg-red-50 text-red-700 rounded-xl text-sm border border-red-100 shadow-sm">
+                            <span className="material-symbols-outlined text-red-500 shrink-0">
+                              {stockDisponible === 0 ? 'remove_shopping_cart' : 'production_quantity_limits'}
+                            </span>
+                            <p>
+                              {stockDisponible === 0 
+                                ? <><strong>Agotado en esta sucursal.</strong> Por favor, elimínalo de tu carrito o cambia de tienda para proceder.</>
+                                : <><strong>Stock insuficiente.</strong> Solo tenemos {stockDisponible} unidades en esta sucursal. Por favor, ajusta la cantidad.</>}
+                            </p>
+                          </div>
+                        </div>
+                      )}
+                      
+                      {/* COLUMNA 1: Imagen, Nombre y Precio Unitario (6 columnas) */}
                       <div className="col-span-1 md:col-span-6 flex items-center gap-4">
-                        <div className="w-24 h-24 bg-gray-50 rounded-xl overflow-hidden border border-gray-100 shrink-0">
+                        <div className="w-20 h-20 md:w-24 md:h-24 bg-gray-50 rounded-xl overflow-hidden border border-gray-100 shrink-0">
                           <img 
                             src={imagenSegura} 
                             alt={nombreSeguro} 
-                            className="w-full h-full object-cover"
-                            onError={(e) => { (e.target as HTMLImageElement).src = 'https://dummyimage.com/150x150/f3f4f6/a1a1aa.png&text=Error+Img'; }}
+                            // ✨ Si el stock es 0, la imagen se pone en escala de grises
+                            className={`w-full h-full object-cover mix-blend-multiply transition-all ${stockDisponible === 0 ? 'grayscale' : ''}`}
+                            onError={(e) => { (e.target as HTMLImageElement).src = 'https://dummyimage.com/150x150/f3f4f6/a1a1aa.png&text=Error'; }}
                           />
                         </div>
-                        <div className="flex flex-col">
-                          <span className="text-xs font-bold text-primary-esmeralda uppercase tracking-widest mb-1">
+                        <div className="flex flex-col pr-4">
+                          <span className="text-[10px] font-bold text-emerald-600 uppercase tracking-widest mb-1">
                             {categoriaSegura}
                           </span>
-                          <Link to={`/producto/${productId}`} className="text-lg font-bold text-slate-900 hover:text-primary transition-colors">
+                          <Link to={`/producto/${productId}`} className="text-base md:text-lg font-bold text-slate-900 leading-tight hover:text-emerald-600 transition-colors line-clamp-2">
                             {nombreSeguro}
                           </Link>
-                          <span className="text-gray-500 font-medium mt-1">${precioSeguro.toFixed(2)} c/u</span>
+                          
+                          <div className="flex items-center gap-2 mt-1.5">
+                            <span className="text-slate-900 font-bold">${precioUnitarioReal.toFixed(2)}</span>
+                            {descuento > 0 && (
+                              <>
+                                <span className="text-gray-400 text-xs line-through">${precioBase.toFixed(2)}</span>
+                                <span className="bg-emerald-100 text-emerald-700 text-[10px] px-1.5 py-0.5 rounded font-black">-{descuento}%</span>
+                              </>
+                            )}
+                          </div>
                         </div>
                       </div>
 
-                      {/* Controles de Cantidad */}
-                      <div className="col-span-1 md:col-span-3 flex justify-start md:justify-center">
-                        <div className="flex items-center border border-gray-200 rounded-xl overflow-hidden bg-gray-50 h-10">
+                      {/* COLUMNA 2: Controles de Cantidad (3 columnas) */}
+                      <div className="col-span-1 md:col-span-3 flex justify-start md:justify-center mt-2 md:mt-0">
+                        <div className={`flex items-center border rounded-xl overflow-hidden h-10 w-32 ${hayConflictoStock ? 'border-red-300 bg-red-50' : 'border-gray-200 bg-gray-50'}`}>
                           <button 
                             onClick={() => updateQuantity(productId, item.cantidad - 1)}
-                            className="px-3 h-full hover:bg-gray-200 transition-colors font-bold text-gray-600"
+                            className="w-10 h-full hover:bg-gray-200 transition-colors font-bold text-gray-600 flex items-center justify-center"
                           >
                             -
                           </button>
-                          <span className="px-4 font-bold text-slate-900 text-center text-sm">{item.cantidad}</span>
+                          <span className={`flex-1 font-bold text-center text-sm ${hayConflictoStock ? 'text-red-600' : 'text-slate-900'}`}>
+                            {item.cantidad}
+                          </span>
                           <button 
                             onClick={() => updateQuantity(productId, item.cantidad + 1)}
-                            className="px-3 h-full hover:bg-gray-200 transition-colors font-bold text-gray-600"
+                            className="w-10 h-full hover:bg-gray-200 transition-colors font-bold text-gray-600 flex items-center justify-center"
                           >
                             +
                           </button>
                         </div>
                       </div>
 
-                      {/* Subtotal del Item */}
-                      <div className="col-span-1 md:col-span-2 text-left md:text-right">
+                      {/* COLUMNA 3: Subtotal (2 columnas) */}
+                      <div className="col-span-1 md:col-span-2 text-left md:text-right hidden md:block">
                         <span className="text-lg font-black text-slate-900">
-                          ${(precioSeguro * item.cantidad).toFixed(2)}
+                          ${subtotalFila.toFixed(2)}
                         </span>
                       </div>
 
-                      {/* Botón Eliminar */}
-                      <div className="col-span-1 md:col-span-1 flex justify-end">
+                      {/* COLUMNA 4: Botón Eliminar (1 columna) */}
+                      <div className="col-span-1 md:col-span-1 flex justify-end absolute top-6 right-0 md:relative md:top-auto mt-8 md:mt-0">
                         <button 
                           onClick={() => removeFromCart(productId)}
                           className="w-10 h-10 rounded-full flex items-center justify-center text-gray-400 hover:text-red-500 hover:bg-red-50 transition-all"
@@ -118,6 +149,13 @@ const Cart: React.FC = () => {
                           <span className="material-symbols-outlined text-[20px]">delete</span>
                         </button>
                       </div>
+
+                      {/* Subtotal en Móvil */}
+                      <div className="col-span-1 flex justify-between items-center md:hidden mt-2 pt-2 border-t border-gray-50">
+                        <span className="text-sm font-medium text-gray-500">Subtotal:</span>
+                        <span className="text-lg font-black text-slate-900">${subtotalFila.toFixed(2)}</span>
+                      </div>
+
                     </div>
                   );
                 })}
@@ -147,9 +185,18 @@ const Cart: React.FC = () => {
                 <p className="text-xs text-gray-400 text-right mt-1">Impuestos incluidos</p>
               </div>
 
-              <button className="w-full bg-slate-900 text-white py-4 rounded-xl font-bold hover:bg-primary-esmeralda transition-colors shadow-lg active:scale-95 flex items-center justify-center gap-2">
-                <span className="material-symbols-outlined">lock</span>
-                Proceder al pago
+              <button 
+                disabled={carritoTieneErrores}
+                className={`w-full py-4 rounded-xl font-bold transition-all flex items-center justify-center gap-2
+                  ${carritoTieneErrores 
+                    ? 'bg-gray-300 text-gray-500 cursor-not-allowed' // Estado deshabilitado
+                    : 'bg-emerald-600 text-white hover:bg-emerald-700 shadow-lg shadow-emerald-600/20 active:scale-95' // Estado activo
+                  }`}
+              >
+                <span className="material-symbols-outlined">
+                  {carritoTieneErrores ? 'block' : 'lock'}
+                </span>
+                {carritoTieneErrores ? 'Resuelve los problemas de stock' : 'Proceder al pago'}
               </button>
 
               <div className="mt-6 flex items-center justify-center gap-2 text-gray-400 text-xs font-medium">

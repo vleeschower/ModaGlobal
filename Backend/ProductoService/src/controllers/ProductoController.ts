@@ -158,10 +158,12 @@ export const crearProducto = async (req: any, res: Response): Promise<void> => {
         }
 
         // 3. INSERTAR GALERÍA CON ORDEN INTELIGENTE Y BIT PRINCIPAL
+        let contadorSecundarias = 2;
+
         for (let i = 0; i < imagenesSubidas.length; i++) {
             const img = imagenesSubidas[i];
-            const esPrincipalBit = (i === indicePrincipal) ? 1 : 0; // BIT 1/0
-            const ordenImagen = (i === indicePrincipal) ? 1 : i + 2; // El principal siempre es el 1
+            const esPrincipalBit = (i === indicePrincipal) ? 1 : 0;
+            const ordenImagen = (esPrincipalBit === 1) ? 1 : contadorSecundarias++;
 
             const reqImg = transaction.request();
             await reqImg
@@ -235,7 +237,7 @@ export const obtenerProductoPorId = async (req: Request, res: Response): Promise
                         (SELECT TOP 1 imagen_url FROM dbo.imagenes_producto 
                          WHERE id_producto = p.id_producto AND es_principal = 1 AND deleted_at IS NULL),
                         p.imagen_url
-                    ) AS imagen_principal,
+                    ) AS imagen_url,
                     
                     c.nombre AS nombre_categoria,
                     
@@ -380,6 +382,24 @@ export const actualizarProducto = async (req: any, res: Response): Promise<void>
 
         // 3. GALERÍA - BORRAR SOLICITADAS
         if (imagesToDelete.length > 0) {
+            // ✨ CAMBIO AQUÍ: Usamos transaction.request() en vez de pool.request()
+            const reqCheckImages = transaction.request(); 
+            const resCheck = await reqCheckImages.input('id_prod', id).query(`
+                SELECT COUNT(*) as total_activas 
+                FROM dbo.imagenes_producto 
+                WHERE id_producto = @id_prod AND deleted_at IS NULL;
+            `);
+
+            const imagenesActuales = resCheck.recordset[0].total_activas;
+            const totalFinalEstimado = imagenesActuales - imagesToDelete.length + imagenesNuevas.length;
+
+            if (totalFinalEstimado <= 0) {
+                // ✨ CAMBIO CRÍTICO: Revertir la transacción antes de salir para evitar bloqueos en SQL Server
+                await transaction.rollback(); 
+                res.status(400).json({ error: 'Operación denegada: El producto no puede quedarse sin imágenes. Sube al menos una foto nueva antes de eliminar las actuales.' });
+                return;
+            }
+            
             const placeholders = imagesToDelete.map((_, i) => `@delImg${i}`).join(',');
             const reqDel = transaction.request();
             reqDel.input('id_user', idUsuario);
@@ -447,6 +467,18 @@ export const actualizarProducto = async (req: any, res: Response): Promise<void>
                 UPDATE dbo.productos SET imagen_url = @first_new_url WHERE id_producto = @id_prod;
             `);
         }
+
+        // 5.5 REORGANIZACIÓN DINÁMICA DEL CARRUSEL (Cierra huecos y elimina colisiones)
+        const reqReorden = transaction.request();
+        await reqReorden.input('id_prod', id).query(`
+            WITH CarruselOrdenado AS (
+                SELECT id_imagen, orden, es_principal,
+                    ROW_NUMBER() OVER(ORDER BY es_principal DESC, created_at ASC) as nuevo_orden
+                FROM dbo.imagenes_producto
+                WHERE id_producto = @id_prod AND deleted_at IS NULL
+            )
+            UPDATE CarruselOrdenado SET orden = nuevo_orden;
+        `);
 
         // 6. AUDITORÍA GLOBAL
         const reqAuditoria = transaction.request();
@@ -523,54 +555,6 @@ export const obtenerCategorias = async (req: Request, res: Response): Promise<vo
     } catch (error) {
         logger.error('Error obteniendo categorías', error);
         res.status(500).json({ error: 'Error al consultar categorías' });
-    }
-};
-
-// ==========================================
-// MÓDULO: PROMOCIONES (Descuentos programados)
-// ==========================================
-export const crearPromocion = async (req: any, res: Response): Promise<void> => {
-    try {
-        const { id_producto, descuento, fecha_inicio, fecha_fin } = req.body;
-        const idUsuarioReal = req.headers['x-user-id'];
-
-        // Validación de negocio: La fecha final debe ser mayor a la inicial
-        if (new Date(fecha_inicio) >= new Date(fecha_fin)) {
-            res.status(400).json({ error: 'La fecha de fin debe ser posterior a la fecha de inicio.' });
-            return;
-        }
-
-        const pool = await getConnection();
-        const idPromocion = `promo-${uuidv4().substring(0,8)}`;
-        const idAuditoria = `aud-${uuidv4().substring(0,8)}`;
-        const valoresNuevos = JSON.stringify({ descuento, fecha_inicio, fecha_fin });
-
-        await pool.request()
-            .input('id_promocion', idPromocion)
-            .input('id_producto', id_producto)
-            .input('descuento', descuento) // Ej. 15.50 para 15.5%
-            .input('fecha_inicio', fecha_inicio)
-            .input('fecha_fin', fecha_fin)
-            .input('id_usuario', idUsuarioReal)
-            .input('id_auditoria', idAuditoria)
-            .input('valores_nuevos', valoresNuevos)
-            .input('ip_origen', req.ip || '127.0.0.1')
-            .query(`
-                BEGIN TRANSACTION;
-                
-                INSERT INTO dbo.promociones (id_promocion, id_producto, descuento, fecha_inicio, fecha_fin, created_by)
-                VALUES (@id_promocion, @id_producto, @descuento, @fecha_inicio, @fecha_fin, @id_usuario);
-
-                INSERT INTO dbo.auditoria_productos (id_auditoria, id_usuario, tabla_afectada, id_registro_afectado, accion, valores_nuevos, ip_origen)
-                VALUES (@id_auditoria, @id_usuario, 'promociones', @id_promocion, 'INSERT', @valores_nuevos, @ip_origen);
-                
-                COMMIT TRANSACTION;
-            `);
-
-        res.status(201).json({ success: true, message: 'Promoción programada exitosamente.' });
-    } catch (error) {
-        logger.error('Error creando promoción', error);
-        res.status(500).json({ error: 'Fallo al registrar la promoción' });
     }
 };
 
@@ -1178,5 +1162,46 @@ export const obtenerInventarioRed = async (req: any, res: Response): Promise<voi
     } catch (error) {
         logger.error('Error al cargar el inventario en red:', error);
         res.status(500).json({ error: 'Error al cargar el inventario en red' });
+    }
+};
+
+export const obtenerProductosPorListaIds = async (req: Request, res: Response): Promise<void> => {
+    try {
+        const { ids } = req.body;
+        // ✨ CLAVE: Obtener la tienda del header (igual que en obtenerProductos)
+        const tiendaCercana = req.headers['x-tienda-cercana'] as string || 'tnd-matriz';
+
+        if (!ids || !Array.isArray(ids) || ids.length === 0) {
+            res.status(400).json({ error: "Se requiere un arreglo de IDs" });
+            return;
+        }
+
+        const pool = await getConnection();
+        const result = await pool.request()
+            .input('tienda', tiendaCercana)
+            .query(`
+                SELECT 
+                    p.id_producto, p.nombre, p.precio_base,
+                    ISNULL(
+                        (SELECT TOP 1 imagen_url FROM dbo.imagenes_producto 
+                         WHERE id_producto = p.id_producto AND es_principal = 1 AND deleted_at IS NULL),
+                        p.imagen_url
+                    ) AS imagen_url,
+                    -- ✨ TRAEMOS STOCK Y DESCUENTO LOCAL PARA EL CARRITO
+                    ISNULL(ir.stock_disponible, 0) as stock_local,
+                    pr.descuento as descuento_local
+                FROM dbo.productos p
+                LEFT JOIN dbo.inventarios_replica ir ON p.id_producto = ir.id_producto AND ir.id_tienda = @tienda
+                LEFT JOIN dbo.promociones pr ON p.id_producto = pr.id_producto 
+                    AND pr.id_tienda = @tienda 
+                    AND pr.deleted_at IS NULL 
+                    AND SYSUTCDATETIME() BETWEEN pr.fecha_inicio AND pr.fecha_fin
+                WHERE p.id_producto IN (${ids.map((id: string) => `'${id}'`).join(',')})
+                AND p.deleted_at IS NULL
+            `);
+
+        res.status(200).json({ success: true, data: result.recordset });
+    } catch (error) {
+        res.status(500).json({ error: "Error al hidratar productos del carrito" });
     }
 };

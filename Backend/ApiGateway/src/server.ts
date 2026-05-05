@@ -60,21 +60,21 @@ const productoProxyOptions: Options = {
 };
 
 const usuarioProxyOptions: Options = {
-    target: 'http://localhost:3022',
+    target: 'http://localhost:3003',
     changeOrigin: true,
     pathRewrite: { '^/api/usuarios': '' },
     on: { proxyReq: (proxyReq, req, _res) => configurarHeadersSeguridad(proxyReq as ClientRequest, req as AuthRequest) }
 };
 
 const ventaProxyOptions: Options = {
-    target: 'http://localhost:3003',
+    target: 'http://localhost:3004',
     changeOrigin: true,
     pathRewrite: { '^/api/ventas': '' },
     on: { proxyReq: (proxyReq, req, _res) => configurarHeadersSeguridad(proxyReq as ClientRequest, req as AuthRequest) }
 };
 
 const carritoProxyOptions: Options = {
-    target: 'http://localhost:3003',
+    target: 'http://localhost:3004',
     changeOrigin: true,
     on: { proxyReq: (proxyReq, req, _res) => configurarHeadersSeguridad(proxyReq as ClientRequest, req as AuthRequest) }
 };
@@ -84,7 +84,7 @@ const carritoProxyOptions: Options = {
 // ==========================================================
 
 // A. Rutas públicas (Login/Register)
-app.post('/api/usuarios/login', limitadorSeguridad, createProxyMiddleware(usuarioProxyOptions));
+app.post('/api/usuarios/login', createProxyMiddleware(usuarioProxyOptions));
 app.post('/api/usuarios/register', limitadorSeguridad, createProxyMiddleware(usuarioProxyOptions));
 
 // B. Rate Limits para Mutaciones (Protección contra SPAM)
@@ -95,15 +95,11 @@ app.post('/api/productos/proveedores/vincular', limitadorSeguridad);
 app.post('/api/productos/resenas', limitadorSeguridad);
 app.delete('/api/productos/:id', limitadorSeguridad);
 
-// // 👇 NUEVO: Rate limits para el carrito para que no te saturen la BD dándole mil clics al botón
-// app.post('/api/carrito/item', limitadorSeguridad);
-// app.post('/api/carrito/sync', limitadorSeguridad);
-app.use('/api/carrito', limitadorSeguridad, validarAccesoGoblal, createProxyMiddleware(carritoProxyOptions));
-
 // C. ENRUTADOR MAESTRO OMNICANAL
 app.use('/api/usuarios', validarAccesoGoblal, createProxyMiddleware(usuarioProxyOptions));
 app.use('/api/venta', validarAccesoGoblal, createProxyMiddleware(ventaProxyOptions));
 app.use('/api/productos', validarAccesoGoblal, createProxyMiddleware(productoProxyOptions));
+app.use('/api/inventario', validarAccesoGoblal, createProxyMiddleware(inventarioProxyOptions));
 
 // 👇 NUEVO: Ruta principal del carrito
 app.use('/api/carrito', validarAccesoGoblal, createProxyMiddleware(carritoProxyOptions));

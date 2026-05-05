@@ -97,7 +97,7 @@ const AdminProductList: React.FC = () => {
             <p className="text-emerald-600 font-bold mt-1 uppercase text-xs">{contexto}</p>
           </div>
           {isSuperAdmin && (
-            <Link to="/dashboard/producto/nuevo" className="bg-slate-900 text-white px-6 py-3 rounded-xl font-bold flex items-center gap-2 hover:bg-emerald-500 transition-colors shadow-lg active:scale-95">
+            <Link to="/admin/producto/nuevo" className="bg-slate-900 text-white px-6 py-3 rounded-xl font-bold flex items-center gap-2 hover:bg-emerald-500 transition-colors shadow-lg active:scale-95">
               <span className="material-symbols-outlined">add_circle</span> Nuevo Producto
             </Link>
           )}
@@ -168,7 +168,7 @@ const AdminProductList: React.FC = () => {
                         <td className="p-5 flex items-center justify-end gap-2">
                             {isSuperAdmin && (
                                 <>
-                                    <Link to={`/dashboard/producto/editar/${prod.id_producto}`} className="p-1.5 text-gray-400 hover:text-emerald-500 transition-colors" title="Editar"><span className="material-symbols-outlined text-lg">edit</span></Link>
+                                    <Link to={`/admin/producto/editar/${prod.id_producto}`} className="p-1.5 text-gray-400 hover:text-emerald-500 transition-colors" title="Editar"><span className="material-symbols-outlined text-lg">edit</span></Link>
                                     <button onClick={() => triggerDelete(prod.id_producto, prod.nombre, prod.imagen_url)} className="p-1.5 text-gray-400 hover:text-red-600 transition-colors" title="Eliminar"><span className="material-symbols-outlined text-lg">delete</span></button>
                                 </>
                             )}

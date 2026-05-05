@@ -72,25 +72,39 @@ const ProductManager: React.FC = () => {
 
   const handleAddSpec = () => setSpecs([...specs, { clave: '', valor: '' }]);
 
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files) {
-      const files = Array.from(e.target.files);
-      const newFiles = files.map((f, i) => ({
-          file: f,
-          preview: URL.createObjectURL(f),
-          localId: `new-${Date.now()}-${i}` // ID temporal local
-      }));
-      
-      setNewImagesFiles(prev => {
-          const updated = [...prev, ...newFiles];
-          // Si es el primer archivo y no hay imagen principal, lo seteamos
-          if (!mainImageId && updated.length === 1 && existingImages.length === 0) {
-              setMainImageId(updated[0].localId);
-          }
-          return updated;
-      });
-    }
-  };
+    const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+        if (e.target.files) {
+            const files = Array.from(e.target.files);
+
+            setNewImagesFiles(prev => {
+                // 1. Filtrar duplicados
+                const newUniqueFiles = files.filter(newFile => 
+                    !prev.some(existing => existing.file.name === newFile.name && existing.file.size === newFile.size)
+                );
+
+                // 2. ✨ NUEVO: Filtrar por peso (Máximo 2MB)
+                const validFiles = newUniqueFiles.filter(f => {
+                    if (f.size > 2 * 1024 * 1024) {
+                        alert(`La imagen "${f.name}" pesa más de 2MB y no se agregará.`);
+                        return false;
+                    }
+                    return true;
+                }).map((f, i) => ({
+                    file: f,
+                    preview: URL.createObjectURL(f),
+                    localId: `new-${Date.now()}-${i}`
+                }));
+
+                if (validFiles.length === 0) return prev;
+
+                const updated = [...prev, ...validFiles];
+                if (!mainImageId && updated.length === validFiles.length && existingImages.length === 0) {
+                    setMainImageId(updated[0].localId);
+                }
+                return updated;
+            });
+        }
+    };
 
   const markExistingForDeletion = (id_imagen: string) => {
     if (id_imagen === mainImageId) {

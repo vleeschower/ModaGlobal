@@ -334,6 +334,20 @@ export const apiService = {
     }
   },
 
+  // Añadir a apiService
+getProductosBatch: async (ids: string[]): Promise<ApiResponse<Producto[]>> => {
+    try {
+        const response = await fetch(`${API_BASE_URL}/api/productos/batch`, {
+            method: 'POST',
+            headers: getAuthHeaders(),
+            body: JSON.stringify({ ids }) 
+        });
+        return await response.json();
+    } catch (error) {
+        return { success: false, message: 'Error de red al hidratar el carrito.' };
+    }
+},
+
   getResena: async (id: string): Promise<ApiResponse<Producto>> => {
     try {
       if (!checkAuth()) {
