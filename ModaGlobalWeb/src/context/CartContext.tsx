@@ -13,7 +13,7 @@ interface CartItem {
 
 interface CartContextType {
   cart: CartItem[];
-  addToCart: (producto: Producto, cantidad: number) => void;
+  addToCart: (producto: Producto, cantidad?: number) => void; // <-- Cambiamos any por Producto
   removeFromCart: (productoId: string) => void;
   updateQuantity: (productoId: string, cantidad: number) => void;
   clearCart: () => void;
@@ -35,16 +35,13 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
   // 1. INICIALIZACIÓN Y CAMBIOS DE SESIÓN (LOGIN / LOGOUT)
   useEffect(() => {
     if (isAuthenticated) {
-      // 🟢 Acaba de loguearse o recargar la página logueado
-      syncLocalCartToDB();
+      smartSyncCart();
     } else {
       if (hasLoadedInitial.current) {
-        // 🔴 ACABA DE CERRAR SESIÓN: Limpiamos absolutamente todo al instante
         setCart([]);
         localStorage.removeItem('mg_cart');
         isSyncing.current = false;
       } else {
-        // 🟡 PRIMERA CARGA COMO INVITADO: Leemos de localStorage
         const savedCart = localStorage.getItem('mg_cart');
         if (savedCart) setCart(JSON.parse(savedCart));
       }
@@ -54,7 +51,6 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   // 2. PERSISTENCIA EN TIEMPO REAL (Solo para invitados)
   useEffect(() => {
-    // Solo guardamos si no está logueado y ya pasó la carga inicial
     if (!isAuthenticated && hasLoadedInitial.current) {
       localStorage.setItem('mg_cart', JSON.stringify(cart));
     }
@@ -64,14 +60,17 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
   useEffect(() => {
     const handleStorageChange = (e: StorageEvent) => {
         if (e.key === 'mg_tienda_seleccionada') {
-            loadCartFromDB(); // Actualiza precios y stock de todos los items
+            loadCartFromDB(); 
         }
     };
     window.addEventListener('storage', handleStorageChange);
     return () => window.removeEventListener('storage', handleStorageChange);
   }, [isAuthenticated]);
 
-  const syncLocalCartToDB = async () => {
+  // ==============================================================
+  // 🧠 SINCRONIZACIÓN Y DEDUPLICACIÓN
+  // ==============================================================
+  const smartSyncCart = async () => {
     if (isSyncing.current) return;
     isSyncing.current = true;
     setLoading(true);
@@ -96,41 +95,45 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const loadCartFromDB = async () => {
     setLoading(true);
     try {
-        let itemsParaHidratar = [];
+        let itemsParaHidratar: any[] = [];
 
         if (isAuthenticated) {
             const res = await apiService.getCarrito();
             if (res.success && res.data) itemsParaHidratar = res.data;
         } else {
-            // Para invitados, leemos lo que hay en el estado local actual o localStorage
             const savedCart = localStorage.getItem('mg_cart');
             if (savedCart) {
                 const localItems = JSON.parse(savedCart);
-                // Convertimos el formato CartItem[] al formato plano de la DB para procesar igual
                 itemsParaHidratar = localItems.map((i: CartItem) => ({ 
-                    id_producto: i.producto.id_producto, 
+                    id_producto: i.producto?.id_producto || (i as any).id_producto, 
                     cantidad: i.cantidad 
                 }));
             }
         }
 
         if (itemsParaHidratar.length > 0) {
-            const ids = itemsParaHidratar.map((item: any) => item.id_producto);
+            // FUSIÓN: Utilizamos la "Aspiradora de Fantasmas" de Rogelio para unificar IDs duplicados que vengan de la DB
+            const mapaDeduplicado = new Map<string, number>();
+            itemsParaHidratar.forEach(item => {
+                const id = item.id_producto;
+                const cant = item.cantidad || 0;
+                mapaDeduplicado.set(id, (mapaDeduplicado.get(id) || 0) + cant);
+            });
+
+            const ids = Array.from(mapaDeduplicado.keys());
             const prodsRes = await apiService.getProductosBatch(ids);
 
             if (prodsRes.success && prodsRes.data) {
-                const cartHidratado = itemsParaHidratar.map((item: any) => {
-                    const infoProducto = prodsRes.data?.find(p => p.id_producto === item.id_producto);
+                const cartHidratado = ids.map(id => {
+                    const infoProducto = prodsRes.data?.find(p => p.id_producto === id);
                     if (infoProducto) {
                         const stockDisponible = infoProducto.stock_local ?? 0;
-                        const cantidadSolicitada = item.cantidad; 
+                        const cantidadSolicitada = mapaDeduplicado.get(id) || 1; 
 
-                        // Ya no modificamos 'cantidadFinal' hacia abajo, ni hacemos upsert a la BD.
-                        // Mantenemos lo que el usuario pidió en el estado del carrito.
                         return { 
                             producto: infoProducto, 
-                            cantidad: cantidadSolicitada, // Se queda con el 5 aunque haya 0
-                            stock_local: stockDisponible  // El componente Cart se encargará de comparar
+                            cantidad: cantidadSolicitada, 
+                            stock_local: stockDisponible  
                         };
                     }
                     return null;
@@ -148,8 +151,8 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
-  const addToCart = async (producto: Producto, cantidad: number) => {
-      const existingItem = cart.find(item => item.producto.id_producto === producto.id_producto);
+  const addToCart = async (producto: Producto, cantidad: number = 1) => { // <-- Añadido el "= 1"
+      const existingItem = cart.find(item => (item.producto?.id_producto || (item as any).id_producto) === producto.id_producto);
       const nuevaCantidad = existingItem ? existingItem.cantidad + cantidad : cantidad;
       const stockDisponible = producto.stock_local ?? 0;
 
@@ -171,12 +174,11 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
       setCart(prevCart => {
         if (existingItem) {
           return prevCart.map(item => 
-            item.producto.id_producto === producto.id_producto 
+            (item.producto?.id_producto || (item as any).id_producto) === producto.id_producto 
               ? { ...item, cantidad: nuevaCantidad }
               : item
           );
         }
-        // Se agrega el campo stock_local para cumplir con la interfaz
         return [...prevCart, { producto, cantidad, stock_local: stockDisponible }];
       });
       showToast('Agregado al carrito');
@@ -184,7 +186,7 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const updateQuantity = async (productoId: string, cantidad: number) => {
       if (cantidad < 1) return;
-      const itemToUpdate = cart.find(item => item.producto.id_producto === productoId);
+      const itemToUpdate = cart.find(item => (item.producto?.id_producto || (item as any).id_producto) === productoId);
       
       if (itemToUpdate) {
           const stockDisponible = itemToUpdate.producto.stock_local ?? 0;
@@ -204,41 +206,35 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
           }
 
           setCart(prevCart => prevCart.map(item => 
-            item.producto.id_producto === productoId ? { ...item, cantidad } : item
+            (item.producto?.id_producto || (item as any).id_producto) === productoId ? { ...item, cantidad } : item
           ));
       }
   };
 
   const removeFromCart = async (productoId: string) => {
     if (isAuthenticated) await apiService.removeFromCarrito(productoId);
-    setCart(prevCart => prevCart.filter(item => item.producto.id_producto !== productoId));
+    setCart(prevCart => prevCart.filter(item => (item.producto?.id_producto || (item as any).id_producto) !== productoId));
   };
 
   const clearCart = async () => {
     if (isAuthenticated) await apiService.clearCarritoDB();
     setCart([]);
+    localStorage.removeItem('mg_cart'); 
   };
 
   const showToast = (title: string) => {
     Swal.fire({
-      toast: true,
-      position: 'bottom-end',
-      icon: 'success',
-      title,
-      showConfirmButton: false,
-      timer: 1500,
-      timerProgressBar: true,
-      background: '#10b981',
-      color: '#fff'
+      toast: true, position: 'bottom-end', icon: 'success', title,
+      showConfirmButton: false, timer: 1500, timerProgressBar: true,
+      background: '#10b981', color: '#fff'
     });
   };
 
-// ✨ BLINDAJE EN EL CÁLCULO TOTAL
+  // ✨ BLINDAJE EN EL CÁLCULO TOTAL (Mantenemos tu lógica de descuentos)
   const totalItems = cart.reduce((total, item) => total + item.cantidad, 0);
   const totalPrice = cart.reduce((total, item) => {
-      const precioBase = Number(item.producto.precio_base || 0);
-      // Buscamos el descuento bajo ambos nombres para evitar fallos
-      const porcentajeDesc = Number(item.producto.descuento_local || (item.producto as any).descuento || 0); 
+      const precioBase = Number(item.producto?.precio_base || 0);
+      const porcentajeDesc = Number(item.producto?.descuento_local || (item.producto as any)?.descuento || 0); 
       const descuentoAplicado = precioBase * (porcentajeDesc / 100);
       
       return total + ((precioBase - descuentoAplicado) * item.cantidad);

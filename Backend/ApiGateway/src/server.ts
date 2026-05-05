@@ -40,6 +40,11 @@ const limitadorSeguridad = rateLimit({
         res.status(429).json({ error: 'Demasiadas peticiones. Acceso restringido por 5 minutos.' });
     },
     skipSuccessfulRequests: false, 
+    // 👇 LA MAGIA QUE AGREGAMOS 👇
+    skip: (req) => {
+        // Si la petición viene de tu propia computadora (localhost en IPv4 o IPv6), ignora el límite
+        return req.ip === '::1' || req.ip === '127.0.0.1' || req.ip === '::ffff:127.0.0.1';
+    }
 });
 
 // ==========================================================
@@ -79,6 +84,13 @@ const carritoProxyOptions: Options = {
     on: { proxyReq: (proxyReq, req, _res) => configurarHeadersSeguridad(proxyReq as ClientRequest, req as AuthRequest) }
 };
 
+// Proxy para los pagos, apuntando al VentasService (3003)
+const pagoProxyOptions: Options = {
+    target: 'http://localhost:3003',
+    changeOrigin: true,
+    on: { proxyReq: (proxyReq, req, _res) => configurarHeadersSeguridad(proxyReq as ClientRequest, req as AuthRequest) }
+};
+
 // ==========================================================
 // 3. ASIGNACIÓN DE RUTAS
 // ==========================================================
@@ -101,8 +113,12 @@ app.use('/api/venta', validarAccesoGoblal, createProxyMiddleware(ventaProxyOptio
 app.use('/api/productos', validarAccesoGoblal, createProxyMiddleware(productoProxyOptions));
 app.use('/api/inventario', validarAccesoGoblal, createProxyMiddleware(inventarioProxyOptions));
 
-// 👇 NUEVO: Ruta principal del carrito
-app.use('/api/carrito', validarAccesoGoblal, createProxyMiddleware(carritoProxyOptions));
+// Ruta principal del carrito protegida con rate limit
+app.use('/api/carrito', limitadorSeguridad, validarAccesoGoblal, createProxyMiddleware(carritoProxyOptions));
+
+// Activamos la ruta de pagos en el Gateway
+app.use('/api/pagos', validarAccesoGoblal, createProxyMiddleware(pagoProxyOptions));
+
 // ==========================================================
 // 4. INICIO DEL SERVIDOR
 // ==========================================================

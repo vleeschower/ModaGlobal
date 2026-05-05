@@ -107,7 +107,7 @@ const Header: React.FC<HeaderProps> = ({ toggleSidebar }) => {
         </div>
 
         {/* ✨ ZONA CENTRAL: SELECTOR DE TIENDA Y BUSCADOR MÁS PEQUEÑO (Tuyo) */}
-        <div className="hidden md:flex flex-1 items-center justify-end gap-3 max-w-2xl">
+        <div className="hidden md:flex flex-1 items-center justify gap-3 max-w-2xl">
           
           {/* Selector Omnicanal Customizado */}
           <div className="relative">
@@ -164,18 +164,6 @@ const Header: React.FC<HeaderProps> = ({ toggleSidebar }) => {
                 </div>
               </>
             )}
-          </div>
-
-          {/* Buscador Compacto */}
-          <div className="relative group w-full max-w-200px xl:max-w-260px">
-            <span className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 group-focus-within:text-white transition-colors text-[20px]">
-              search
-            </span>
-            <input 
-              className="w-full bg-white/10 border-none rounded-full py-2 pl-10 pr-4 text-white placeholder:text-gray-400 focus:ring-2 focus:ring-primary-esmeralda focus:bg-white/20 transition-all text-sm outline-none" 
-              placeholder="Buscar..." 
-              type="text" 
-            />
           </div>
         </div>
 

@@ -26,3 +26,12 @@
     --spacing-1440px: 1440px;
 }
 
+/* Ocultar barra de scroll en Chrome, Safari y Opera */
+.hide-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+/* Ocultar barra de scroll en IE, Edge y Firefox */
+.hide-scrollbar {
+  -ms-overflow-style: none;  /* IE and Edge */
+  scrollbar-width: none;  /* Firefox */
+}
