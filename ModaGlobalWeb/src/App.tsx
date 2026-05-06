@@ -27,6 +27,7 @@ import SolicitudesStock from './pages/dashboard/SolicitudesStock';
 import TiendasDashboard from './pages/dashboard/TiendasDashboard';
 import EntregasDashboard from './pages/dashboard/EntregasDashboard'; 
 import PosDashboard from './pages/dashboard/PosDashboard'; // ✨ NUEVA IMPORTACIÓN DEL PUNTO DE VENTA
+import PuntoEntrega from './pages/dashboard/PuntoEntrega'; // ✨ NUEVA IMPORTACIÓN DEL PUNTO DE ENTREGA
 
 function App() {
   return (
@@ -75,8 +76,14 @@ function App() {
               </ProtectedRoute>
             } />
 
+            <Route path="/dashboard/PuntoEntrega" element={
+              <ProtectedRoute allowedRoles={['SuperAdministrador', 'Administrador', 'Cajero']}>
+                <PuntoEntrega />
+              </ProtectedRoute>
+            } />
+
             {/* ✨ RUTA DE ENTREGAS OMNICANAL ✨ */}
-            <Route path="/dashboard/entregas" element={
+            <Route path="/dashboard/EntregasDashboard" element={
               <ProtectedRoute allowedRoles={['SuperAdministrador', 'Administrador', 'Cajero']}>
                 <EntregasDashboard />
               </ProtectedRoute>

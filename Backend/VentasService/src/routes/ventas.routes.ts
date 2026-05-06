@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { verificarAccesoInterno, verificarRol } from '../middlewares/Security';
-import { getVentas, createVenta, actualizarEstado } from '../controllers/ventas.controller';
+import { getVentas, createVenta, actualizarEstado, buscarPorCodigoRecoleccion, confirmarEntregaLocal } from '../controllers/ventas.controller';
 
 const router = Router();
 
@@ -16,6 +16,8 @@ router.use(verificarAccesoInterno);
 
 // Obtener historial: Solo Staff puede ver todas las ventas
 router.get('/', verificarRol(['Cajero', 'Administrador', 'SuperAdministrador']), getVentas);
+router.get('/codigo/:codigo', verificarRol(['Cajero', 'Administrador', 'SuperAdministrador']), buscarPorCodigoRecoleccion);
+router.post('/:id_venta/entregar', verificarRol(['Cajero', 'Administrador', 'SuperAdministrador']), confirmarEntregaLocal);
 
 // Crear venta: 
 // IMPORTANTE: Si es Venta en Línea, el Cliente necesita permiso. 

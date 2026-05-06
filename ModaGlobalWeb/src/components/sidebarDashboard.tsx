@@ -21,7 +21,7 @@ const Sidebar: React.FC<SidebarProps> = ({ isOpen, toggleSidebar }) => {
     { name: 'Productos', icon: 'inventory_2', path: '/dashboard/productos', roles: ['SuperAdministrador', 'Administrador', 'Cajero'] },
     { name: 'Stock en Red', icon: 'warehouse', path: '/dashboard/inventario', roles: ['SuperAdministrador', 'Administrador'] },
     { name: 'Reabastecimiento', icon: 'local_shipping', path: '/dashboard/solicitudes', roles: ['SuperAdministrador', 'Administrador'] },
-    { name: 'Pedidos', icon: 'shopping_cart', path: '#', roles: ['SuperAdministrador', 'Administrador', 'Cajero'] },
+    { name: 'Pedidos', icon: 'shopping_cart', path: '/dashboard/EntregasDashboard', roles: ['SuperAdministrador', 'Administrador', 'Cajero'] },
   ];
 
   // Filtrar items según el rol del usuario

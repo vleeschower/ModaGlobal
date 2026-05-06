@@ -8,8 +8,12 @@ import WebSocket from "ws"; // ✨ NUEVO IMPORT
 dotenv.config();
 
 const connectionString = process.env.AZURE_SERVICEBUS_CONNECTION_STRING || '';
-const topicName = "tienda.inventarios"; // 🎧 Escuchamos el tópico de Inventarios
-const subscriptionName = "sub-catalogo-seo"; // Nombre de nuestra suscripción (buzón)
+const topicInventarios = "tienda.inventarios";
+const subInventarios = "sub-catalogo-seo";
+
+// ✨ NUEVA CONFIGURACIÓN PARA VENTAS
+const topicVentas = "tienda.ventas";
+const subVentas = "sub-ventas-producto";
 
 export const iniciarEscuchaEventos = async () => {
     if (!connectionString) {
@@ -23,11 +27,12 @@ export const iniciarEscuchaEventos = async () => {
             webSocket: WebSocket
         }
     });
-    const receiver = sbClient.createReceiver(topicName, subscriptionName);
+    const receiverInventarios = sbClient.createReceiver(topicInventarios, subInventarios);
+    const receiverVentas = sbClient.createReceiver(topicVentas, subVentas);
 
-    logger.info(`🎧 Productos escuchando eventos por WebSockets en Tópico: ${topicName} | Sub: ${subscriptionName}`);
+    logger.info(`🎧 Inventario escuchando Tópicos: [${topicInventarios}] y [${topicVentas}]`);
 
-    const procesarMensaje = async (mensajeRecibido: any) => {
+    const procesarMensajeInventarios = async (mensajeRecibido: any) => {
         try {
             const payload = mensajeRecibido.body.payload;
             const metadata = mensajeRecibido.body.metadata;
@@ -111,7 +116,7 @@ export const iniciarEscuchaEventos = async () => {
                     `);
 
                 logger.info(`✅ Réplicas DUALES sincronizadas: Prod ${id_producto} | Matriz: ${matriz.stock_disponible} | Sucursal: ${sucursal.stock_disponible}`);
-                await receiver.completeMessage(mensajeRecibido);
+                await receiverInventarios.completeMessage(mensajeRecibido);
                 return;
             }
 
@@ -159,17 +164,107 @@ export const iniciarEscuchaEventos = async () => {
                     `);
 
                 logger.info(`✅ Réplica sincronizada en Productos: Prod ${id_producto} | Tienda ${id_tienda} | Stock: ${stock_disponible}`);
-                await receiver.completeMessage(mensajeRecibido);
+                await receiverInventarios.completeMessage(mensajeRecibido);
                 return;
             }
 
             // Si es un evento que no nos interesa
-            await receiver.completeMessage(mensajeRecibido);
+            await receiverInventarios.completeMessage(mensajeRecibido);
 
         } catch (error) {
             logger.error(`❌ Error procesando evento en BD de Productos:`, error);
             try {
-                await receiver.deadLetterMessage(mensajeRecibido, {
+                await receiverInventarios.deadLetterMessage(mensajeRecibido, {
+                    deadLetterReason: "ErrorProcesamientoBD",
+                    deadLetterErrorDescription: error instanceof Error ? error.message : "Fallo desconocido"
+                });
+            } catch (dlqError) {}
+        }
+    };
+
+    // 2. NUEVO MANEJADOR DE VENTAS (Solo actualiza la réplica visual)
+    const procesarMensajeVentas = async (mensajeRecibido: any) => {
+        try {
+            const { metadata, payload } = mensajeRecibido.body;
+
+            if (metadata.evento === 'VENTA_COMPLETADA') {
+                const { id_venta, id_tienda, items } = payload;
+                const pool = await getConnection();
+                
+                for (const item of items) {
+                    await pool.request()
+                        .input('id_t', id_tienda)
+                        .input('id_p', item.id_producto)
+                        .input('cant', item.cantidad)
+                        .query(`
+                            BEGIN TRY
+                                BEGIN TRANSACTION;
+                                -- Actualizamos la réplica visual para el catálogo
+                                UPDATE dbo.inventarios_replica 
+                                SET stock_disponible = stock_disponible - @cant,
+                                    stock_reservado = stock_reservado + @cant,
+                                    updated_at = SYSUTCDATETIME()
+                                WHERE id_tienda = @id_t AND id_producto = @id_p;
+                                COMMIT TRANSACTION;
+                            END TRY
+                            BEGIN CATCH
+                                IF @@TRANCOUNT > 0 ROLLBACK TRANSACTION;
+                                THROW;
+                            END CATCH
+                        `);
+                }
+                logger.info(`✅ Réplica de catálogo actualizada por Venta ${id_venta}`);
+                await receiverVentas.completeMessage(mensajeRecibido);
+            }
+            if (metadata.evento === 'PEDIDO_ENTREGADO') {
+                const { id_venta, id_tienda, items } = payload;
+                const pool = await getConnection();
+                
+                for (const item of items) {
+                    await pool.request()
+                        .input('id_t', id_tienda)
+                        .input('id_p', item.id_producto)
+                        .input('cant', item.cantidad)
+                        .query(`
+                            BEGIN TRY
+                                BEGIN TRANSACTION;
+                                
+                                DECLARE @stock_reservado_actual INT;
+                                SELECT @stock_reservado_actual = stock_reservado 
+                                FROM dbo.inventarios_replica WITH (UPDLOCK) 
+                                WHERE id_tienda = @id_t AND id_producto = @id_p;
+
+                                -- Actualizamos la réplica visual vaciando la reserva
+                                IF @stock_reservado_actual >= @cant
+                                BEGIN
+                                    UPDATE dbo.inventarios_replica 
+                                    SET stock_reservado = stock_reservado - @cant,
+                                        updated_at = SYSUTCDATETIME()
+                                    WHERE id_tienda = @id_t AND id_producto = @id_p;
+                                END
+                                ELSE
+                                BEGIN
+                                    UPDATE dbo.inventarios_replica 
+                                    SET stock_reservado = 0,
+                                        updated_at = SYSUTCDATETIME()
+                                    WHERE id_tienda = @id_t AND id_producto = @id_p;
+                                END
+
+                                COMMIT TRANSACTION;
+                            END TRY
+                            BEGIN CATCH
+                                IF @@TRANCOUNT > 0 ROLLBACK TRANSACTION;
+                                THROW;
+                            END CATCH
+                        `);
+                }
+                logger.info(`✅ Réplica de catálogo actualizada: Reserva vaciada por Entrega de Venta ${id_venta}`);
+                await receiverVentas.completeMessage(mensajeRecibido);
+            }
+        } catch (error) {
+            logger.error(`❌ Error procesando evento en BD de Productos:`, error);
+            try {
+                await receiverVentas.deadLetterMessage(mensajeRecibido, {
                     deadLetterReason: "ErrorProcesamientoBD",
                     deadLetterErrorDescription: error instanceof Error ? error.message : "Fallo desconocido"
                 });
@@ -181,8 +276,6 @@ export const iniciarEscuchaEventos = async () => {
         logger.error(`❌ Error en la red de Service Bus: ${errorInfo.error}`);
     };
 
-    receiver.subscribe({
-        processMessage: procesarMensaje,
-        processError: procesarError
-    });
+    receiverInventarios.subscribe({ processMessage: procesarMensajeInventarios, processError: procesarError });
+    receiverVentas.subscribe({ processMessage: procesarMensajeVentas, processError: procesarError });
 };

@@ -6,12 +6,12 @@ import Header from '../components/header';
 import Footer from '../components/footer';
 import ProductCard from '../components/ProductCard';
 import { useAuth } from '../context/AuthContext'; 
-import { useCart } from '../context/CartContext'; // <-- Lógica del carrito (De Rogelio)
+import { useCart } from '../context/CartContext';
 
 const ProductDetails: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const { isSuperAdmin } = useAuth(); 
-  const { addToCart } = useCart(); // <-- Función del carrito (De Rogelio)
+  const { addToCart } = useCart(); 
 
   const [product, setProduct] = useState<Producto | null>(null);
   const [related, setRelated] = useState<Producto[]>([]);
@@ -35,6 +35,7 @@ const ProductDetails: React.FC = () => {
     
     if (res.success && res.data) {
       setProduct(res.data);
+      // ✨ Aquí usamos imagen_url solo para el estado inicial de la foto grande
       setMainImage(res.data.imagen_url || res.data.galeria?.[0]?.imagen_url || 'https://via.placeholder.com/800?text=Sin+Imagen');
       
       const relRes = await apiService.getProductos(1, 4);
@@ -131,14 +132,7 @@ const ProductDetails: React.FC = () => {
             
             {product.galeria && product.galeria.length > 0 && (
               <div className="flex gap-4 overflow-x-auto pb-2 scrollbar-thin">
-                {product.imagen_url && (
-                    <button 
-                      onClick={() => setMainImage(product.imagen_url!)}
-                      className={`w-20 h-20 shrink-0 rounded-xl overflow-hidden border-2 transition-all ${mainImage === product.imagen_url ? 'border-emerald-500 shadow-md' : 'border-transparent hover:border-gray-200'}`}
-                    >
-                      <img src={product.imagen_url} alt="Principal" className="w-full h-full object-cover" />
-                    </button>
-                )}
+                {/* ✨ CORRECCIÓN: Quitamos el botón suelto de product.imagen_url y solo mapeamos galeria */}
                 {product.galeria.map((img, idx) => (
                   <button 
                     key={idx}

@@ -1,7 +1,9 @@
+// src/pages/ProductManager.tsx
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import DashboardLayout from '../components/dashboardLayout';
 import { apiService } from '../services/ApiService';
+import Swal from 'sweetalert2'; // ✨ IMPORTAMOS SWEETALERT2
 
 const ProductManager: React.FC = () => {
   const { id } = useParams<{ id: string }>(); 
@@ -23,7 +25,6 @@ const ProductManager: React.FC = () => {
 
   // ✨ GESTIÓN DE GALERÍA INTELIGENTE
   const [existingImages, setExistingImages] = useState<any[]>([]); 
-  // Ahora guardamos un objeto local con el File y un ID temporal para poder marcarlo como principal
   const [newImagesFiles, setNewImagesFiles] = useState<{file: File, preview: string, localId: string}[]>([]);
   const [mainImageId, setMainImageId] = useState<string | null>(null);
   const [imagesToDelete, setImagesToDelete] = useState<string[]>([]);
@@ -60,7 +61,7 @@ const ProductManager: React.FC = () => {
                   const principal = loadedGallery.find((img: any) => img.es_principal);
                   setMainImageId(principal ? principal.id_imagen : (loadedGallery[0]?.id_imagen || null));
               } else {
-                  alert("No se pudo cargar la información del producto.");
+                  Swal.fire('Error', 'No se pudo cargar la información del producto.', 'error');
                   navigate('/dashboard/productos');
               }
           }
@@ -72,43 +73,49 @@ const ProductManager: React.FC = () => {
 
   const handleAddSpec = () => setSpecs([...specs, { clave: '', valor: '' }]);
 
-    const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-        if (e.target.files) {
-            const files = Array.from(e.target.files);
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+      if (e.target.files) {
+          const files = Array.from(e.target.files);
 
-            setNewImagesFiles(prev => {
-                // 1. Filtrar duplicados
-                const newUniqueFiles = files.filter(newFile => 
-                    !prev.some(existing => existing.file.name === newFile.name && existing.file.size === newFile.size)
-                );
+          setNewImagesFiles(prev => {
+              // Filtrar duplicados visuales
+              const newUniqueFiles = files.filter(newFile => 
+                  !prev.some(existing => existing.file.name === newFile.name && existing.file.size === newFile.size)
+              );
 
-                // 2. ✨ NUEVO: Filtrar por peso (Máximo 2MB)
-                const validFiles = newUniqueFiles.filter(f => {
-                    if (f.size > 2 * 1024 * 1024) {
-                        alert(`La imagen "${f.name}" pesa más de 2MB y no se agregará.`);
-                        return false;
-                    }
-                    return true;
-                }).map((f, i) => ({
-                    file: f,
-                    preview: URL.createObjectURL(f),
-                    localId: `new-${Date.now()}-${i}`
-                }));
+              // Filtrar por peso (Máximo 2MB)
+              const validFiles = newUniqueFiles.filter(f => {
+                  if (f.size > 2 * 1024 * 1024) {
+                      Swal.fire('Imagen muy pesada', `La imagen "${f.name}" pesa más de 2MB y no se agregará.`, 'warning');
+                      return false;
+                  }
+                  return true;
+              }).map((f, i) => ({
+                  file: f,
+                  preview: URL.createObjectURL(f),
+                  localId: `new-${Date.now()}-${i}`
+              }));
 
-                if (validFiles.length === 0) return prev;
+              if (validFiles.length === 0) return prev;
 
-                const updated = [...prev, ...validFiles];
-                if (!mainImageId && updated.length === validFiles.length && existingImages.length === 0) {
-                    setMainImageId(updated[0].localId);
-                }
-                return updated;
-            });
-        }
-    };
+              const updated = [...prev, ...validFiles];
+              if (!mainImageId && updated.length === validFiles.length && existingImages.length === 0) {
+                  setMainImageId(updated[0].localId);
+              }
+              return updated;
+          });
+      }
+  };
 
+  // ✨ VALIDACIÓN PROACTIVA FRONTEND
   const markExistingForDeletion = (id_imagen: string) => {
     if (id_imagen === mainImageId) {
-        alert("No puedes eliminar la imagen principal. Selecciona otra como principal primero.");
+        Swal.fire({
+            icon: 'warning',
+            title: 'Acción no permitida',
+            text: 'No puedes eliminar la imagen que está fijada como Portada. Fija otra imagen como Principal primero.',
+            confirmButtonColor: '#10b981'
+        });
         return;
     }
     setImagesToDelete(prev => [...prev, id_imagen]);
@@ -119,15 +126,15 @@ const ProductManager: React.FC = () => {
     if (mainImageId === localId) setMainImageId(null);
   };
 
+  // ✨ MANEJADOR DE GUARDADO BLINDADO
   const handleSaveAll = async () => {
     if (!form.nombre || !form.precio_base || !form.id_categoria) {
-        alert("El nombre, precio y categoría son obligatorios.");
+        Swal.fire('Faltan datos obligatorios', 'Asegúrate de llenar el nombre, precio y seleccionar una categoría.', 'warning');
         return;
     }
 
     setIsSubmitting(true);
     try {
-        // ✨ IDENTIFICAMOS LA IMAGEN PRINCIPAL (Si es vieja o es nueva)
         let finalMainImageId = '';
         let finalMainImageIndex = -1;
 
@@ -148,14 +155,28 @@ const ProductManager: React.FC = () => {
             imagesToDelete
         );
 
-        if (resData.success) {
-            alert(id ? "¡Producto actualizado con éxito!" : "¡Producto publicado con éxito!");
-            navigate('/dashboard/productos'); 
+        // Si la respuesta es exitosa o el mensaje del backend es de éxito (por precaución)
+        if (resData.success || resData.message === 'Producto actualizado correctamente.') {
+            Swal.fire({
+                icon: 'success',
+                title: '¡Excelente!',
+                text: id ? "El producto se ha actualizado con éxito." : "El producto se ha publicado en el catálogo.",
+                confirmButtonColor: '#10b981'
+            }).then(() => {
+                navigate('/dashboard/productos'); 
+            });
         } else {
+            // Lanza el error del backend a nuestro Catch
             throw new Error(resData.error || resData.message || 'Error desconocido del servidor');
         }
     } catch (error: any) {
-        alert("Hubo un error: " + error.message);
+        // ✨ VALIDACIÓN REACTIVA BACKEND: Atrapa el error "Debes cambiar de imagen de portada..."
+        Swal.fire({
+            icon: 'error',
+            title: 'No se pudieron guardar los cambios',
+            text: error.message,
+            confirmButtonColor: '#ef4444'
+        });
     } finally {
         setIsSubmitting(false);
     }
@@ -249,14 +270,12 @@ const ProductManager: React.FC = () => {
                 <img src={img.imagen_url} alt="Producto" className="w-full h-32 object-cover bg-white" />
                 <div className="absolute inset-0 bg-slate-900/40 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col justify-between p-2">
                   <div className="flex justify-end">
-                      {mainImageId !== img.id_imagen && (
-                          <button type="button" onClick={() => markExistingForDeletion(img.id_imagen)} className="w-8 h-8 flex items-center justify-center bg-white/20 text-white rounded-full hover:bg-red-500 backdrop-blur-sm transition-colors">
-                              <span className="material-symbols-outlined text-[18px]">delete</span>
-                          </button>
-                      )}
+                      <button type="button" onClick={() => markExistingForDeletion(img.id_imagen)} className="w-8 h-8 flex items-center justify-center bg-white/20 text-white rounded-full hover:bg-red-500 backdrop-blur-sm transition-colors shadow-sm">
+                          <span className="material-symbols-outlined text-[18px]">delete</span>
+                      </button>
                   </div>
                   <button type="button" onClick={() => setMainImageId(img.id_imagen)} className={`w-full text-xs py-1.5 rounded-lg font-bold transition-colors ${mainImageId === img.id_imagen ? 'bg-emerald-500 text-white' : 'bg-white text-slate-900 hover:bg-emerald-50 shadow-sm'}`}>
-                      {mainImageId === img.id_imagen ? 'Principal' : 'Fijar Principal'}
+                      {mainImageId === img.id_imagen ? 'Portada Principal' : 'Fijar Portada'}
                   </button>
                 </div>
               </div>
@@ -269,14 +288,12 @@ const ProductManager: React.FC = () => {
                 <div className="absolute inset-0 bg-slate-900/40 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col justify-between p-2">
                    <div className="flex justify-between items-start">
                        <span className="text-[9px] bg-emerald-500 text-white px-2 py-1 rounded-md font-bold tracking-widest shadow-sm">NUEVA</span>
-                       {mainImageId !== fObj.localId && (
-                           <button type="button" onClick={() => removeNewFile(fObj.localId)} className="w-8 h-8 flex items-center justify-center bg-white/20 text-white rounded-full hover:bg-red-500 backdrop-blur-sm transition-colors">
-                              <span className="material-symbols-outlined text-[18px]">close</span>
-                           </button>
-                       )}
+                       <button type="button" onClick={() => removeNewFile(fObj.localId)} className="w-8 h-8 flex items-center justify-center bg-white/20 text-white rounded-full hover:bg-red-500 backdrop-blur-sm transition-colors">
+                          <span className="material-symbols-outlined text-[18px]">close</span>
+                       </button>
                    </div>
                    <button type="button" onClick={() => setMainImageId(fObj.localId)} className={`w-full text-xs py-1.5 rounded-lg font-bold transition-colors ${mainImageId === fObj.localId ? 'bg-emerald-500 text-white' : 'bg-white text-slate-900 hover:bg-emerald-50 shadow-sm'}`}>
-                      {mainImageId === fObj.localId ? 'Principal' : 'Fijar Principal'}
+                      {mainImageId === fObj.localId ? 'Portada Principal' : 'Fijar Portada'}
                   </button>
                 </div>
               </div>

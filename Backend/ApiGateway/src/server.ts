@@ -64,28 +64,28 @@ const productoProxyOptions: Options = {
 };
 
 const usuarioProxyOptions: Options = {
-    target: process.env.USUARIO_SERVICE_URL || 'http://127.0.0.1:3022',
+    target: process.env.USUARIO_SERVICE_URL || 'http://127.0.0.1:3003',
     changeOrigin: true,
     pathRewrite: { '^/api/usuarios': '' },
     on: { proxyReq: (proxyReq, req, _res) => configurarHeadersSeguridad(proxyReq as ClientRequest, req as AuthRequest) }
 };
 
 const ventaProxyOptions: Options = {
-    target: process.env.VENTAS_SERVICE_URL || 'http://127.0.0.1:3003',
+    target: process.env.VENTAS_SERVICE_URL || 'http://127.0.0.1:3004',
     changeOrigin: true,
     pathRewrite: { '^/api/ventas': '' },
     on: { proxyReq: (proxyReq, req, _res) => configurarHeadersSeguridad(proxyReq as ClientRequest, req as AuthRequest) }
 };
 
 const carritoProxyOptions: Options = {
-    target: process.env.VENTAS_SERVICE_URL || 'http://127.0.0.1:3003',
+    target: process.env.VENTAS_SERVICE_URL || 'http://127.0.0.1:3004',
     changeOrigin: true,
     on: { proxyReq: (proxyReq, req, _res) => configurarHeadersSeguridad(proxyReq as ClientRequest, req as AuthRequest) }
 };
 
 // Proxy para los pagos, apuntando al VentasService (3003)
 const pagoProxyOptions: Options = {
-    target: process.env.VENTAS_SERVICE_URL || 'http://127.0.0.1:3003',
+    target: process.env.VENTAS_SERVICE_URL || 'http://127.0.0.1:3004',
     changeOrigin: true,
     on: { proxyReq: (proxyReq, req, _res) => configurarHeadersSeguridad(proxyReq as ClientRequest, req as AuthRequest) }
 };

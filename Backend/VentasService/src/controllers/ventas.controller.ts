@@ -2,6 +2,7 @@
 import { Request, Response } from 'express';
 import { PrismaClient } from '@prisma/client';
 import { actualizarEstadoVenta } from '../services/ventas.service';
+import { publicarEventoVenta } from '../events/EventPublisher';
 
 const prisma = new PrismaClient();
 
@@ -163,4 +164,112 @@ export const actualizarEstado = async (req: Request, res: Response): Promise<voi
 
     res.status(500).json({ error: 'Error interno al actualizar el estado de la venta' });
   }
+};
+
+// ==========================================
+// 🛒 1. BUSCAR TICKET POR CÓDIGO DE RECOLECCIÓN
+// ==========================================
+export const buscarPorCodigoRecoleccion = async (req: Request<{ codigo: string }>, res: Response): Promise<void> => {
+    try {
+        const { codigo } = req.params; // Ahora TypeScript sabe 100% que esto es un 'string'
+        const id_tienda_cajero = (req as any).usuarioTiendaId;
+        const rol_usuario = (req as any).user?.rol;
+
+        const venta = await prisma.ventas.findFirst({
+            where: { codigo_recoleccion: codigo },
+            include: { detalles: true }
+        });
+
+        if (!venta) {
+            res.status(404).json({ error: 'No se encontró ningún pedido con ese código.' });
+            return;
+        }
+
+        // Seguridad: El cajero solo puede ver pedidos de su propia sucursal
+        if (rol_usuario !== 'SuperAdministrador' && venta.id_tienda !== id_tienda_cajero) {
+            res.status(403).json({ error: 'Este pedido pertenece a otra sucursal. El cliente debe ir a la sucursal correcta.' });
+            return;
+        }
+
+        res.json({ success: true, data: venta });
+    } catch (error) {
+        console.error('Error buscando código de recolección:', error);
+        res.status(500).json({ error: 'Error interno al buscar el código.' });
+    }
+};
+
+// ==========================================
+// 📦 2. MARCAR COMO ENTREGADO (ELIMINAR RESERVA)
+// ==========================================
+export const confirmarEntregaLocal = async (req: Request, res: Response): Promise<void> => {
+    try {
+        const id_venta = req.params.id_venta as string;
+        const id_usuario_cajero = (req as any).usuarioTransaccion;
+        const id_tienda_cajero = (req as any).usuarioTiendaId;
+        const rol_usuario = (req as any).user?.rol;
+
+        // 1. Buscamos la venta
+        const venta = await prisma.ventas.findUnique({
+            where: { id_venta },
+            include: { detalles: true }
+        });
+
+        if (!venta) {
+            res.status(404).json({ error: 'Venta no encontrada.' });
+            return;
+        }
+
+        // 2. Validaciones de Negocio
+        if (rol_usuario !== 'SuperAdministrador' && venta.id_tienda !== id_tienda_cajero) {
+            res.status(403).json({ error: 'No puedes entregar pedidos de otra sucursal.' });
+            return;
+        }
+
+        if (venta.estado === 'ENTREGADA') {
+            res.status(400).json({ error: 'Este pedido ya fue marcado como entregado anteriormente.' });
+            return;
+        }
+
+        if (venta.estado !== 'PAGADO' && venta.estado !== 'COMPLETADA' && venta.estado !== 'LISTO_PARA_RECOGER') {
+            res.status(400).json({ error: `No se puede entregar. El estado actual del pedido es: ${venta.estado}` });
+            return;
+        }
+
+        // 3. Ejecutamos la actualización atómica
+        const ventaActualizada = await prisma.$transaction(async (tx) => {
+            const actualizada = await tx.ventas.update({
+                where: { id_venta },
+                data: { estado: 'ENTREGADA' }
+            });
+
+            await tx.auditoriaVentas.create({
+                data: {
+                    id_auditoria: `LOG-${Date.now()}`,
+                    id_venta: id_venta,
+                    estado_anterior: venta.estado,
+                    estado_nuevo: 'ENTREGADA',
+                    id_usuario: id_usuario_cajero
+                }
+            });
+
+            return actualizada;
+        });
+
+        // 4. 🔥 EMITIR EVENTO PARA VACIAR EL STOCK RESERVADO
+        await publicarEventoVenta('PEDIDO_ENTREGADO', {
+            id_venta: venta.id_venta,
+            id_tienda: venta.id_tienda,
+            id_cajero: id_usuario_cajero,
+            items: venta.detalles.map(d => ({
+                id_producto: d.id_producto,
+                cantidad: d.cantidad
+            }))
+        });
+
+        res.json({ success: true, message: 'Pedido entregado exitosamente al cliente.', data: ventaActualizada });
+
+    } catch (error) {
+        console.error('Error al confirmar entrega:', error);
+        res.status(500).json({ error: 'Error interno al confirmar la entrega.' });
+    }
 };

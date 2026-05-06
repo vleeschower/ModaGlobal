@@ -5,14 +5,13 @@ import { v4 as uuidv4 } from 'uuid';
 import xss from 'xss'; // Librería Anti-XSS
 import { publicarEvento } from '../events/EventPublisher';
 
+// ============================================================================
 // GET: Público (Clientes y Navegantes) con LÓGICA DE TIENDA CERCANA (OMNICANAL)
+// ============================================================================
 export const obtenerProductos = async (req: Request, res: Response): Promise<void> => {
     try {
         const page = parseInt(req.query.page as string) || 1;
         const limit = parseInt(req.query.limit as string) || 20;
-        
-        // ✨ LÓGICA OMNICANAL: Recibimos la tienda más cercana calculada por el Gateway/Usuarios
-        // Si el usuario no ha iniciado sesión o no tiene dirección, caemos en un fallback (ej. CEDIS/Nacional)
         const tiendaCercana = req.headers['x-tienda-cercana'] as string || req.query.tienda as string || 'tnd-matriz';
 
         const safeLimit = limit > 100 ? 100 : limit; 
@@ -28,20 +27,12 @@ export const obtenerProductos = async (req: Request, res: Response): Promise<voi
                 DECLARE @TotalRecords INT;
                 SELECT @TotalRecords = COUNT(*) FROM dbo.productos WHERE deleted_at IS NULL;
 
-                -- ✨ Obtenemos productos + Stock local + Promociones locales válidas hoy
                 SELECT 
                     p.id_producto, 
                     p.nombre, 
                     p.descripcion, 
                     p.precio_base, 
-                    
-                    -- ✨ CORRECCIÓN: Traer siempre la imagen principal dinámica de la galería
-                    ISNULL(
-                        (SELECT TOP 1 imagen_url FROM dbo.imagenes_producto 
-                         WHERE id_producto = p.id_producto AND es_principal = 1 AND deleted_at IS NULL),
-                        p.imagen_url -- Fallback a la estática por si acaso
-                    ) AS imagen_url,
-                    
+                    p.imagen_url, -- ✨ OPTIMIZADO: Lee directo de la tabla de productos
                     p.id_categoria,
                     c.nombre AS nombre_categoria,
                     ISNULL(ir.stock_disponible, 0) as stock_local,
@@ -49,9 +40,7 @@ export const obtenerProductos = async (req: Request, res: Response): Promise<voi
                     pr.fecha_fin as promo_fin
                 FROM dbo.productos p
                 LEFT JOIN dbo.categorias c ON p.id_categoria = c.id_categoria
-                -- 📍 Cruce con la Réplica de Inventarios para ESTA tienda específica
                 LEFT JOIN dbo.inventarios_replica ir ON p.id_producto = ir.id_producto AND ir.id_tienda = @tienda
-                -- 💰 Cruce con Promociones para ESTA tienda específica (solo si están vigentes)
                 LEFT JOIN dbo.promociones pr ON p.id_producto = pr.id_producto 
                      AND pr.id_tienda = @tienda 
                      AND pr.deleted_at IS NULL 
@@ -70,7 +59,7 @@ export const obtenerProductos = async (req: Request, res: Response): Promise<voi
 
         res.status(200).json({ 
             success: true, 
-            tienda_referencia: tiendaCercana, // Informamos al front qué tienda estamos usando
+            tienda_referencia: tiendaCercana,
             meta: {
                 pagina_actual: page,
                 productos_por_pagina: safeLimit,
@@ -86,7 +75,9 @@ export const obtenerProductos = async (req: Request, res: Response): Promise<voi
     }
 };
 
-// POST: Protegido (Solo Admins y SuperAdmins)
+// ==========================================
+// POST: CREAR PRODUCTO (Solo Admins)
+// ==========================================
 export const crearProducto = async (req: any, res: Response): Promise<void> => {
     const pool = await getConnection();
     const transaction = pool.transaction();
@@ -94,8 +85,6 @@ export const crearProducto = async (req: any, res: Response): Promise<void> => {
     try {
         const { nombre, descripcion, precio_base, sku, id_categoria, stock_inicial, mainImageIndex } = req.body;
         const idUsuarioReal = req.headers['x-user-id'] || 'SISTEMA'; 
-        
-        // ✨ ESTRATEGIA OMNICANAL: Fallback absoluto a la Sede Central si el admin no tiene tienda
         const tiendaDestino = 'tnd-matriz';
 
         const imagenesSubidas = req.files as Express.Multer.File[] || [];
@@ -138,7 +127,7 @@ export const crearProducto = async (req: any, res: Response): Promise<void> => {
                 VALUES (@id_producto, @nombre, @descripcion, @id_categoria, @precio_base, @sku, @imagen_url, @id_usuario);
             `);
 
-        // 2. INSERTAR ESPECIFICACIONES (Antes faltaba)
+        // 2. INSERTAR ESPECIFICACIONES
         for (let i = 0; i < especificaciones.length; i++) {
             const spec = especificaciones[i];
             if (spec.clave && spec.valor) {
@@ -157,7 +146,7 @@ export const crearProducto = async (req: any, res: Response): Promise<void> => {
             }
         }
 
-        // 3. INSERTAR GALERÍA CON ORDEN INTELIGENTE Y BIT PRINCIPAL
+        // 3. INSERTAR GALERÍA CON ORDEN INTELIGENTE
         let contadorSecundarias = 2;
 
         for (let i = 0; i < imagenesSubidas.length; i++) {
@@ -195,9 +184,6 @@ export const crearProducto = async (req: any, res: Response): Promise<void> => {
         await transaction.commit();
         logger.info(`Producto ${idProducto} creado con su galería y especificaciones.`);
         
-        // ==========================================
-        // EMITIR EVENTO (Ahora con la Tienda garantizada)
-        // ==========================================
         await publicarEvento('PRODUCTO_CREADO', {
             id_producto: idProducto,
             nombre: nombreLimpio,
@@ -215,12 +201,12 @@ export const crearProducto = async (req: any, res: Response): Promise<void> => {
     }       
 };
 
-// 1. OBTENER DETALLE COMPLETO (Producto + Imágenes + Specs + Rating + LÓGICA OMNICANAL)
-// 1. OBTENER DETALLE COMPLETO (Producto + Imágenes + Specs + Rating + LÓGICA OMNICANAL)
+// ==========================================
+// 1. OBTENER DETALLE COMPLETO DEL PRODUCTO
+// ==========================================
 export const obtenerProductoPorId = async (req: Request, res: Response): Promise<void> => {
     try {
         const { id } = req.params;
-        // ✨ OMNICANALIDAD: Saber a qué tienda está apuntando el cliente
         const tiendaCercana = req.headers['x-tienda-cercana'] as string || req.query.tienda as string || 'tnd-matriz';
 
         const pool = await getConnection();
@@ -230,57 +216,40 @@ export const obtenerProductoPorId = async (req: Request, res: Response): Promise
             .input('tienda', tiendaCercana)
             .query(`
                 SELECT 
-                    p.id_producto, p.nombre, p.descripcion, p.precio_base, p.sku, 
-                    
-                    -- ✨ CORRECCIÓN: Imagen Principal Dinámica
-                    ISNULL(
-                        (SELECT TOP 1 imagen_url FROM dbo.imagenes_producto 
-                         WHERE id_producto = p.id_producto AND es_principal = 1 AND deleted_at IS NULL),
-                        p.imagen_url
-                    ) AS imagen_url,
-                    
+                    p.id_producto, p.nombre, p.descripcion, p.precio_base, p.sku, p.imagen_url,
                     c.nombre AS nombre_categoria,
-                    
-                    -- ✨ STOCK Y PROMOCIONES DE LA TIENDA CERCANA
                     ISNULL(ir.stock_disponible, 0) as stock_local,
                     pr.descuento as descuento_local,
                     pr.fecha_fin as promo_fin,
                     
-                    -- Subconsulta: Galería de Imágenes
-                    (SELECT imagen_url, es_principal, orden 
+                    -- Galería de Imágenes (La fuente real de las fotos para el grid)
+                    (SELECT id_imagen, imagen_url, es_principal, orden 
                      FROM dbo.imagenes_producto 
                      WHERE id_producto = p.id_producto AND deleted_at IS NULL 
                      ORDER BY orden 
                      FOR JSON PATH) AS galeria,
                      
-                    -- Subconsulta: Especificaciones Técnicas
                     (SELECT clave, valor 
                      FROM dbo.especificaciones_producto 
                      WHERE id_producto = p.id_producto AND deleted_at IS NULL 
                      ORDER BY orden 
                      FOR JSON PATH) AS especificaciones,
                      
-                    -- Subconsulta: Resumen de Calificaciones
                     (SELECT COUNT(*) as total, ISNULL(AVG(CAST(calificacion AS DECIMAL(3,2))), 0) as promedio
                      FROM dbo.resenas_producto 
                      WHERE id_producto = p.id_producto AND deleted_at IS NULL
                      FOR JSON PATH, WITHOUT_ARRAY_WRAPPER) AS rating,
                      
-                    -- Subconsulta: Últimas 5 reseñas
                     (SELECT TOP 5 id_resena, id_usuario, nombre_usuario_snapshot, calificacion, comentario, created_at 
                      FROM dbo.resenas_producto 
                      WHERE id_producto = p.id_producto AND deleted_at IS NULL
                      ORDER BY created_at DESC 
-                     FOR JSON PATH) AS reseñas_recientes, -- ✨ ¡AQUÍ ESTÁ LA COMA QUE FALTABA!
+                     FOR JSON PATH) AS reseñas_recientes,
 
-                     -- ✨ CORRECCIÓN ARQUITECTÓNICA: 
-                     -- Como la tabla movimientos_inventario vive en otro microservicio,
-                     -- enviamos NULL y dejamos que el Frontend use su mensaje por defecto.
                      NULL AS razon_agotado
 
                 FROM dbo.productos p
                 LEFT JOIN dbo.categorias c ON p.id_categoria = c.id_categoria
-                -- 📍 Cruces Omnicanal
                 LEFT JOIN dbo.inventarios_replica ir ON p.id_producto = ir.id_producto AND ir.id_tienda = @tienda
                 LEFT JOIN dbo.promociones pr ON p.id_producto = pr.id_producto AND pr.id_tienda = @tienda AND pr.deleted_at IS NULL AND SYSUTCDATETIME() BETWEEN pr.fecha_inicio AND pr.fecha_fin
                 
@@ -309,7 +278,7 @@ export const obtenerProductoPorId = async (req: Request, res: Response): Promise
 };
 
 // ==========================================
-// MÓDULO: ACTUALIZAR PRODUCTO (PUT)
+// MÓDULO: ACTUALIZAR PRODUCTO (PUT) - 🛡️ BLINDADO 🛡️
 // ==========================================
 export const actualizarProducto = async (req: any, res: Response): Promise<void> => {
     const { id } = req.params;
@@ -380,26 +349,39 @@ export const actualizarProducto = async (req: any, res: Response): Promise<void>
             }
         }
 
-        // 3. GALERÍA - BORRAR SOLICITADAS
+        // 3. GALERÍA - VALIDACIONES Y BORRADO
         if (imagesToDelete.length > 0) {
-            // ✨ CAMBIO AQUÍ: Usamos transaction.request() en vez de pool.request()
             const reqCheckImages = transaction.request(); 
             const resCheck = await reqCheckImages.input('id_prod', id).query(`
-                SELECT COUNT(*) as total_activas 
-                FROM dbo.imagenes_producto 
-                WHERE id_producto = @id_prod AND deleted_at IS NULL;
+                SELECT 
+                    (SELECT COUNT(*) FROM dbo.imagenes_producto WHERE id_producto = @id_prod AND deleted_at IS NULL) as total_activas,
+                    (SELECT TOP 1 id_imagen FROM dbo.imagenes_producto WHERE id_producto = @id_prod AND es_principal = 1 AND deleted_at IS NULL) as current_main
             `);
 
             const imagenesActuales = resCheck.recordset[0].total_activas;
+            const currentMainId = resCheck.recordset[0].current_main;
             const totalFinalEstimado = imagenesActuales - imagesToDelete.length + imagenesNuevas.length;
 
+            // Validación A: No dejar el producto sin fotos
             if (totalFinalEstimado <= 0) {
-                // ✨ CAMBIO CRÍTICO: Revertir la transacción antes de salir para evitar bloqueos en SQL Server
                 await transaction.rollback(); 
-                res.status(400).json({ error: 'Operación denegada: El producto no puede quedarse sin imágenes. Sube al menos una foto nueva antes de eliminar las actuales.' });
+                res.status(400).json({ error: 'El producto no puede quedarse sin imágenes. Sube al menos una foto nueva antes de eliminar las actuales.' });
                 return;
             }
+
+            // ✨ VALIDACIÓN B: Si borra la principal, DEBE asignar otra obligatoriamente
+            if (currentMainId && imagesToDelete.includes(currentMainId)) {
+                const isAssigningNewMain = mainImageIndex !== undefined && mainImageIndex !== null && parseInt(mainImageIndex) >= 0;
+                const isAssigningExistingValidMain = mainImageId && mainImageId !== 'null' && mainImageId !== 'undefined' && !imagesToDelete.includes(mainImageId);
+
+                if (!isAssigningNewMain && !isAssigningExistingValidMain) {
+                    await transaction.rollback(); 
+                    res.status(400).json({ error: 'Debes cambiar de imagen de portada antes de eliminar esta imagen.' });
+                    return;
+                }
+            }
             
+            // Si pasó las validaciones, procedemos a borrar
             const placeholders = imagesToDelete.map((_, i) => `@delImg${i}`).join(',');
             const reqDel = transaction.request();
             reqDel.input('id_user', idUsuario);
@@ -411,7 +393,7 @@ export const actualizarProducto = async (req: any, res: Response): Promise<void>
             `);
         }
 
-        // 4. GALERÍA - INTELIGENCIA DE ORDEN PARA LAS NUEVAS
+        // 4. GALERÍA - INSERTAR NUEVAS FOTOS
         const reqMaxOrden = transaction.request();
         reqMaxOrden.input('id_prod', id);
         const resultOrden = await reqMaxOrden.query(`
@@ -437,8 +419,8 @@ export const actualizarProducto = async (req: any, res: Response): Promise<void>
                 .input('id_img', newImgId)
                 .input('id_prod', id)
                 .input('img_url', img.path)
-                .input('es_princ', 0) // Inicialmente no son principales
-                .input('orden', nextOrden++) // ✨ Orden Dinámico autoincremental
+                .input('es_princ', 0) 
+                .input('orden', nextOrden++) 
                 .input('id_user', idUsuario)
                 .query(`
                     INSERT INTO dbo.imagenes_producto (id_imagen, id_producto, imagen_url, es_principal, orden, created_by)
@@ -446,10 +428,10 @@ export const actualizarProducto = async (req: any, res: Response): Promise<void>
                 `);
         }
 
-        // 5. GALERÍA - ASIGNAR LA IMAGEN PRINCIPAL (El BIT 1 y Orden 1)
+        // 5. ✨ SINCRONIZACIÓN MAESTRA DE LA IMAGEN PRINCIPAL ✨
         const reqMainImg = transaction.request();
         await reqMainImg.input('id_prod', id).query(`
-            -- Apagamos todas las estrellas
+            -- Apagamos todas las estrellas temporalmente
             UPDATE dbo.imagenes_producto SET es_principal = 0 WHERE id_producto = @id_prod;
         `);
 
@@ -457,6 +439,7 @@ export const actualizarProducto = async (req: any, res: Response): Promise<void>
             reqMainImg.input('main_id', mainImageId);
             await reqMainImg.query(`
                 UPDATE dbo.imagenes_producto SET es_principal = 1, orden = 1 WHERE id_imagen = @main_id;
+                -- Copiamos a la tabla de productos
                 UPDATE dbo.productos SET imagen_url = (SELECT imagen_url FROM dbo.imagenes_producto WHERE id_imagen = @main_id) WHERE id_producto = @id_prod;
             `);
         } else if (idPrincipalNuevo) {
@@ -464,11 +447,29 @@ export const actualizarProducto = async (req: any, res: Response): Promise<void>
             reqMainImg.input('first_new_url', urlPrincipalNuevo);
             await reqMainImg.query(`
                 UPDATE dbo.imagenes_producto SET es_principal = 1, orden = 1 WHERE id_imagen = @first_new_id;
+                -- Copiamos a la tabla de productos
                 UPDATE dbo.productos SET imagen_url = @first_new_url WHERE id_producto = @id_prod;
+            `);
+        } else {
+            // FAILSAFE: Si por error no se mandó una principal, agarramos la primera que exista y la volvemos principal
+            await reqMainImg.query(`
+                DECLARE @FailsafeId VARCHAR(50);
+                DECLARE @FailsafeUrl VARCHAR(500);
+
+                SELECT TOP 1 @FailsafeId = id_imagen, @FailsafeUrl = imagen_url 
+                FROM dbo.imagenes_producto 
+                WHERE id_producto = @id_prod AND deleted_at IS NULL 
+                ORDER BY orden ASC, created_at ASC;
+
+                IF @FailsafeId IS NOT NULL
+                BEGIN
+                    UPDATE dbo.imagenes_producto SET es_principal = 1, orden = 1 WHERE id_imagen = @FailsafeId;
+                    UPDATE dbo.productos SET imagen_url = @FailsafeUrl WHERE id_producto = @id_prod;
+                END
             `);
         }
 
-        // 5.5 REORGANIZACIÓN DINÁMICA DEL CARRUSEL (Cierra huecos y elimina colisiones)
+        // 5.5 REORGANIZACIÓN DINÁMICA DEL CARRUSEL
         const reqReorden = transaction.request();
         await reqReorden.input('id_prod', id).query(`
             WITH CarruselOrdenado AS (
@@ -514,7 +515,6 @@ export const eliminarProducto = async (req: any, res: Response): Promise<void> =
         const pool = await getConnection();
         const idAuditoria = `aud-${uuidv4().substring(0,8)}`;
 
-        // ✨ NUEVO: Empaquetamos todo en una transacción
         await pool.request()
             .input('id_producto', id)
             .input('id_usuario', idUsuario)
@@ -1098,7 +1098,9 @@ export const obtenerProductosAdmin = async (req: any, res: Response): Promise<vo
     }
 };
 
+// ====================================================================================
 // GET: Inventario en Red (Tabla cruzada: Matriz vs Local)
+// ====================================================================================
 export const obtenerInventarioRed = async (req: any, res: Response): Promise<void> => {
     try {
         const id_tienda = req.usuarioTiendaId;
@@ -1107,7 +1109,7 @@ export const obtenerInventarioRed = async (req: any, res: Response): Promise<voi
         const page = parseInt(req.query.page as string) || 1;
         const limit = parseInt(req.query.limit as string) || 10;
         const search = req.query.search ? req.query.search.toString() : null;
-        const sortParam = req.query.sort ? req.query.sort.toString() : 'newest'; // ✨ NUEVO
+        const sortParam = req.query.sort ? req.query.sort.toString() : 'newest'; 
         const offset = (page - 1) * limit;
 
         const pool = await getConnection();
@@ -1115,22 +1117,14 @@ export const obtenerInventarioRed = async (req: any, res: Response): Promise<voi
             .input('id_tienda', id_tienda)
             .input('id_matriz', ID_SEDE_CENTRAL)
             .input('search', search)
-            .input('sort', sortParam) // ✨ NUEVO
+            .input('sort', sortParam) 
             .input('limit', limit)
             .input('offset', offset)
             .query(`
                 DECLARE @Total INT = (SELECT COUNT(*) FROM dbo.productos WHERE deleted_at IS NULL AND (@search IS NULL OR nombre LIKE '%' + @search + '%' OR sku LIKE '%' + @search + '%'));
 
                 SELECT 
-                    p.id_producto, p.sku, p.nombre, 
-                    
-                    -- ✨ CORRECCIÓN: Imagen Principal Dinámica
-                    ISNULL(
-                        (SELECT TOP 1 imagen_url FROM dbo.imagenes_producto 
-                         WHERE id_producto = p.id_producto AND es_principal = 1 AND deleted_at IS NULL),
-                        p.imagen_url
-                    ) AS imagen_url,
-                    
+                    p.id_producto, p.sku, p.nombre, p.imagen_url, -- ✨ OPTIMIZADO
                     ISNULL(inv_local.stock_disponible, 0) as stock_local,
                     ISNULL(inv_matriz.stock_disponible, 0) as stock_matriz
                 FROM dbo.productos p
@@ -1138,7 +1132,6 @@ export const obtenerInventarioRed = async (req: any, res: Response): Promise<voi
                 LEFT JOIN dbo.inventarios_replica inv_matriz ON p.id_producto = inv_matriz.id_producto AND inv_matriz.id_tienda = @id_matriz
                 WHERE p.deleted_at IS NULL AND (@search IS NULL OR p.nombre LIKE '%' + @search + '%' OR p.sku LIKE '%' + @search + '%')
                 ORDER BY 
-                    -- ✨ NUEVO: Lógica dinámica de ordenamiento
                     CASE WHEN @sort = 'az' THEN p.nombre END ASC,
                     CASE WHEN @sort = 'za' THEN p.nombre END DESC,
                     CASE WHEN @sort = 'newest' THEN p.created_at END DESC,
@@ -1163,10 +1156,12 @@ export const obtenerInventarioRed = async (req: any, res: Response): Promise<voi
     }
 };
 
+// ====================================================================================
+// OBTENER PRODUCTOS PARA EL CARRITO (Por Lista de IDs)
+// ====================================================================================
 export const obtenerProductosPorListaIds = async (req: Request, res: Response): Promise<void> => {
     try {
         const { ids } = req.body;
-        // ✨ CLAVE: Obtener la tienda del header (igual que en obtenerProductos)
         const tiendaCercana = req.headers['x-tienda-cercana'] as string || 'tnd-matriz';
 
         if (!ids || !Array.isArray(ids) || ids.length === 0) {
@@ -1179,13 +1174,7 @@ export const obtenerProductosPorListaIds = async (req: Request, res: Response): 
             .input('tienda', tiendaCercana)
             .query(`
                 SELECT 
-                    p.id_producto, p.nombre, p.precio_base,
-                    ISNULL(
-                        (SELECT TOP 1 imagen_url FROM dbo.imagenes_producto 
-                         WHERE id_producto = p.id_producto AND es_principal = 1 AND deleted_at IS NULL),
-                        p.imagen_url
-                    ) AS imagen_url,
-                    -- ✨ TRAEMOS STOCK Y DESCUENTO LOCAL PARA EL CARRITO
+                    p.id_producto, p.nombre, p.precio_base, p.imagen_url, -- ✨ OPTIMIZADO
                     ISNULL(ir.stock_disponible, 0) as stock_local,
                     pr.descuento as descuento_local
                 FROM dbo.productos p
@@ -1205,8 +1194,7 @@ export const obtenerProductosPorListaIds = async (req: Request, res: Response): 
 };
 
 // ====================================================================================
-// 🔥 MÓDULO INTERNO: OBTENER MÚLTIPLES PRODUCTOS (Para VentasService / Carrito)
-// 👇 ¡ESTA ES LA MAGIA QUE FALTABA! Le metimos la foto desde imagenes_producto
+// 🔥 OBTENER MÚLTIPLES PRODUCTOS (Para VentasService)
 // ====================================================================================
 export const obtenerMultiplesProductos = async (req: Request, res: Response): Promise<void> => {
     try {
@@ -1220,31 +1208,21 @@ export const obtenerMultiplesProductos = async (req: Request, res: Response): Pr
         const pool = await getConnection();
         const request = pool.request();
 
-        // Armamos los placeholders dinámicos para SQL (ej. @id0, @id1, @id2)
         const placeholders = ids.map((id, index) => {
             request.input(`id${index}`, id);
             return `@id${index}`;
         }).join(', ');
 
-        // 👇 LA SUBCONSULTA MÁGICA: 
-        // Va a la tabla imagenes_producto, agarra la principal, y si por algún motivo no existe, agarra la plana.
-        // Y lo más importante: Se lo manda a React exactamente con el nombre "imagen_url".
         const result = await request.query(`
             SELECT 
                 p.id_producto, 
                 p.nombre, 
                 p.precio_base,
-                COALESCE(
-                    (SELECT TOP 1 imagen_url 
-                     FROM dbo.imagenes_producto 
-                     WHERE id_producto = p.id_producto AND es_principal = 1 AND deleted_at IS NULL),
-                    p.imagen_url
-                ) AS imagen_url
+                p.imagen_url -- ✨ OPTIMIZADO
             FROM dbo.productos p 
             WHERE p.id_producto IN (${placeholders}) AND p.deleted_at IS NULL
         `);
 
-        // Devolvemos el JSON limpio al microservicio de Ventas
         res.status(200).json(result.recordset);
     } catch (error) {
         logger.error('Error al obtener múltiples productos:', error);

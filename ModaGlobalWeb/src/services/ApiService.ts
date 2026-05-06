@@ -609,5 +609,29 @@ export const apiService = {
       console.error('Error al procesar pago:', error);
       return { success: false, message: 'Error de red al procesar el pago.' };
     }
-  }
+  },
+
+  buscarTicketPorCodigo: async (codigo: string): Promise<ApiResponse<any>> => {
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/venta/codigo/${codigo}`, {
+        method: 'GET',
+        headers: getAuthHeaders(),
+      });
+      return await response.json();
+    } catch (error: any) {
+      return { success: false, message: 'Error de red al buscar el ticket.' };
+    }
+  },
+
+  confirmarEntregaPedido: async (id_venta: string): Promise<ApiResponse<any>> => {
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/venta/${id_venta}/entregar`, {
+        method: 'POST',
+        headers: getAuthHeaders(),
+      });
+      return await response.json();
+    } catch (error: any) {
+      return { success: false, message: 'Error de red al confirmar la entrega.' };
+    }
+  },
 };
