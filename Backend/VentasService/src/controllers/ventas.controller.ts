@@ -273,3 +273,77 @@ export const confirmarEntregaLocal = async (req: Request, res: Response): Promis
         res.status(500).json({ error: 'Error interno al confirmar la entrega.' });
     }
 };
+
+// ✨ NUEVO: CONTROLADOR EXCLUSIVO PARA PUNTO DE VENTA FÍSICO
+export const procesarVentaFisica = async (req: Request, res: Response): Promise<void> => {
+  try {
+    const { id_tienda, subtotal, impuestos, total, detalles, id_usuario } = req.body;
+    
+    // El cajero es quien está haciendo la transacción (viene del token)
+    const id_cajero = (req as any).usuarioTransaccion || (req as any).user?.id;
+
+    if (!id_tienda || !detalles || detalles.length === 0) {
+      res.status(400).json({ error: 'Faltan datos requeridos (tienda o detalles del ticket).' });
+      return;
+    }
+
+    // Generamos un ID específico para ventas de mostrador (POS - Point of Sale)
+    const nuevaVentaId = `VTA-POS-${Date.now()}`;
+
+    // 1. Transacción Atómica: Creamos la venta y su auditoría
+    const nuevaVenta = await prisma.$transaction(async (tx) => {
+      const venta = await tx.ventas.create({
+        data: {
+          id_venta: nuevaVentaId,
+          id_usuario: id_usuario || id_cajero, // Puede ser null si es un cliente anónimo
+          id_tienda: id_tienda,
+          canal: 'FISICO',
+          subtotal: subtotal,
+          impuestos: impuestos,
+          total: total,
+          estado: 'ENTREGADA', // 👈 ¡CLAVE! Nace y muere como ENTREGADA al instante
+          codigo_recoleccion: `POS-${Math.floor(1000 + Math.random() * 9000)}`, // Un código por si se necesita para devoluciones
+          detalles: {
+            create: detalles.map((item: any, index: number) => ({
+              id_detalle: `DET-POS-${Date.now()}-${index}`,
+              id_producto: item.id_producto,
+              nombre_producto_snapshot: item.nombre_producto,
+              cantidad: item.cantidad,
+              precio_unitario: item.precio_unitario,
+            }))
+          }
+        },
+        include: { detalles: true }
+      });
+
+      // Dejamos registro inmediato en auditoría
+      await tx.auditoriaVentas.create({
+        data: {
+          id_auditoria: `LOG-POS-${Date.now()}`,
+          id_venta: nuevaVentaId,
+          estado_anterior: 'N/A', // No había estado previo
+          estado_nuevo: 'ENTREGADA',
+          id_usuario: id_cajero
+        }
+      });
+
+      return venta;
+    });
+
+    // 2. 📢 Disparamos el Evento para que Inventarios y Productos descuenten su stock físico
+    await publicarEventoVenta('VENTA_FISICA_COMPLETADA', {
+        id_venta: nuevaVenta.id_venta,
+        id_tienda: id_tienda,
+        id_cajero: id_cajero,
+        items: detalles.map((d: any) => ({
+            id_producto: d.id_producto,
+            cantidad: d.cantidad
+        }))
+    });
+
+    res.status(201).json(nuevaVenta);
+  } catch (error) {
+    console.error('Error procesando venta física en sucursal:', error);
+    res.status(500).json({ error: 'Error interno al procesar el cobro en caja.' });
+  }
+};

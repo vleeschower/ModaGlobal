@@ -54,7 +54,7 @@ router.post('/resenas', crearResena);
 // 5. RUTAS DE ADMINISTRACIÓN (Estáticas)
 // ==========================================
 // Vistas del Dashboard
-router.get('/admin/lista', verificarRol(['Administrador', 'SuperAdministrador']), obtenerProductosAdmin);
+router.get('/admin/lista', verificarRol(['Cajero', 'Administrador', 'SuperAdministrador']), obtenerProductosAdmin);
 router.get('/promociones/admin', verificarRol(['Administrador', 'SuperAdministrador']), obtenerPromocionesAdmin);
 router.get('/inventario/red', verificarRol(['Administrador', 'SuperAdministrador']), obtenerInventarioRed);
 

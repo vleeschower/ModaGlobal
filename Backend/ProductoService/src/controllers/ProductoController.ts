@@ -1033,7 +1033,6 @@ export const obtenerProductosAdmin = async (req: any, res: Response): Promise<vo
                 SELECT @TotalRecords as total_registros;
             `;
         } 
-        // 🏪 LÓGICA ADMIN
         else {
             if (!id_tienda) {
                 res.status(400).json({ error: 'Token inválido: Tu usuario no tiene una tienda asignada en el sistema.' });
@@ -1041,16 +1040,17 @@ export const obtenerProductosAdmin = async (req: any, res: Response): Promise<vo
             }
             queryStr = `
                 DECLARE @TotalRecords INT = (
-                    SELECT COUNT(*) FROM dbo.productos 
-                    WHERE deleted_at IS NULL
-                    AND (@search IS NULL OR nombre LIKE '%' + @search + '%' OR sku LIKE '%' + @search + '%')
+                    SELECT COUNT(*) FROM dbo.productos p
+                    WHERE p.deleted_at IS NULL
+                    AND (@search IS NULL OR p.nombre LIKE '%' + @search + '%' OR p.sku LIKE '%' + @search + '%')
                 );
 
                 SELECT 
                     p.id_producto, p.nombre, p.sku, p.precio_base, c.nombre as categoria,
                     ISNULL(ir.stock_disponible, 0) as stock_local,
+                    ISNULL(ir.stock_reservado, 0) as stock_reservado, -- ✨ ¡AQUÍ ESTÁ LA MAGIA!
                     pr.descuento as descuento,
-                    pr.fecha_inicio as promo_inicio, -- ✨ NUEVO: Agregamos la fecha de inicio
+                    pr.fecha_inicio as promo_inicio,
                     pr.fecha_fin as promo_fin
                 FROM dbo.productos p
                 LEFT JOIN dbo.categorias c ON p.id_categoria = c.id_categoria

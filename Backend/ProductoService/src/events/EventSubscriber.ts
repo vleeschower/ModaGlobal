@@ -216,6 +216,34 @@ export const iniciarEscuchaEventos = async () => {
                 logger.info(`✅ Réplica de catálogo actualizada por Venta ${id_venta}`);
                 await receiverVentas.completeMessage(mensajeRecibido);
             }
+            if (metadata.evento === 'VENTA_FISICA_COMPLETADA') {
+                const { id_venta, id_tienda, items } = payload;
+                const pool = await getConnection();
+                
+                for (const item of items) {
+                    await pool.request()
+                        .input('id_t', id_tienda)
+                        .input('id_p', item.id_producto)
+                        .input('cant', item.cantidad)
+                        .query(`
+                            BEGIN TRY
+                                BEGIN TRANSACTION;
+                                -- Rebaja directa de la réplica (catálogo web). No toca reserva.
+                                UPDATE dbo.inventarios_replica 
+                                SET stock_disponible = CASE WHEN stock_disponible >= @cant THEN stock_disponible - @cant ELSE 0 END,
+                                    updated_at = SYSUTCDATETIME()
+                                WHERE id_tienda = @id_t AND id_producto = @id_p;
+                                COMMIT TRANSACTION;
+                            END TRY
+                            BEGIN CATCH
+                                IF @@TRANCOUNT > 0 ROLLBACK TRANSACTION;
+                                THROW;
+                            END CATCH
+                        `);
+                }
+                logger.info(`✅ Catálogo actualizado tras Venta de Mostrador ${id_venta}`);
+                await receiverVentas.completeMessage(mensajeRecibido);
+            }
             if (metadata.evento === 'PEDIDO_ENTREGADO') {
                 const { id_venta, id_tienda, items } = payload;
                 const pool = await getConnection();

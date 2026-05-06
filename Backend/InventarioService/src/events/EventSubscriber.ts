@@ -124,7 +124,7 @@ export const iniciarEscuchaEventos = async () => {
         try {
             const { metadata, payload } = mensajeRecibido.body;
 
-            // ✨ RESERVAR STOCK
+            // ✨ RESERVAR STOCK (Venta en línea)
             if (metadata.evento === 'VENTA_COMPLETADA') {
                 const { id_venta, id_tienda, id_usuario, items } = payload;
                 const pool = await getConnection();
@@ -142,7 +142,6 @@ export const iniciarEscuchaEventos = async () => {
 
                                 IF @id_inv IS NOT NULL
                                 BEGIN
-                                    -- AQUÍ SÍ ES LA TABLA DE INVENTARIOS CORRECTA
                                     UPDATE dbo.inventarios 
                                     SET stock_disponible = stock_disponible - @cant,
                                         stock_reservado = stock_reservado + @cant,
@@ -161,6 +160,57 @@ export const iniciarEscuchaEventos = async () => {
                         `);
                 }
                 logger.info(`✅ Stock reservado exitosamente (Venta ${id_venta})`);
+                await receiverVentas.completeMessage(mensajeRecibido);
+            }
+
+            // ✨ VENTA FÍSICA DE MOSTRADOR (El que tenía el error de NULL)
+            else if (metadata.evento === 'VENTA_FISICA_COMPLETADA') {
+                const { id_venta, id_tienda, id_cajero, items } = payload;
+                const pool = await getConnection();
+                
+                for (const item of items) {
+                    const idMovNuevo = `mov-${uuidv4().substring(0, 8)}`;
+                    await pool.request()
+                        .input('id_t', id_tienda)
+                        .input('id_p', item.id_producto)
+                        .input('cant', item.cantidad)
+                        .input('id_venta', id_venta)
+                        .input('id_usr', id_cajero)
+                        .input('id_mov', idMovNuevo)
+                        .query(`
+                            BEGIN TRY
+                                BEGIN TRANSACTION;
+                                DECLARE @id_inv VARCHAR(50);
+                                SELECT @id_inv = id_inventario FROM dbo.inventarios WITH (UPDLOCK) 
+                                WHERE id_tienda = @id_t AND id_producto = @id_p;
+
+                                IF @id_inv IS NOT NULL
+                                BEGIN
+                                    -- Se descuenta DIRECTO del stock disponible. NO toca el reservado.
+                                    UPDATE dbo.inventarios 
+                                    SET stock_disponible = stock_disponible - @cant,
+                                        updated_at = SYSUTCDATETIME()
+                                    WHERE id_inventario = @id_inv;
+
+                                    INSERT INTO dbo.movimientos_inventario (id_movimiento, id_inventario, tipo_movimiento, cantidad, id_referencia, created_by)
+                                    VALUES (@id_mov, @id_inv, 'VENTA_FISICA_MOSTRADOR', -@cant, @id_venta, @id_usr);
+                                    
+                                    -- ✨ SOLUCIÓN AL ERROR: Agregamos valores_nuevos
+                                    DECLARE @id_auditoria VARCHAR(50) = 'aud-' + LEFT(NEWID(), 8);
+                                    DECLARE @json_val NVARCHAR(MAX) = '{"cantidad_afectada": -' + CAST(@cant AS VARCHAR) + '}';
+                                    
+                                    INSERT INTO dbo.auditoria_inventarios (id_auditoria, id_usuario, tabla_afectada, id_registro_afectado, accion, valores_nuevos, ip_origen)
+                                    VALUES (@id_auditoria, @id_usr, 'inventarios', @id_inv, 'VENTA_FISICA', @json_val, '127.0.0.1');
+                                END
+                                COMMIT TRANSACTION;
+                            END TRY
+                            BEGIN CATCH
+                                IF @@TRANCOUNT > 0 ROLLBACK TRANSACTION;
+                                THROW;
+                            END CATCH
+                        `);
+                }
+                logger.info(`✅ Stock descontado definitivamente por Venta Física de Mostrador ${id_venta}`);
                 await receiverVentas.completeMessage(mensajeRecibido);
             }
             
@@ -206,9 +256,6 @@ export const iniciarEscuchaEventos = async () => {
             }
         } catch (error) {
             logger.error(`❌ Error procesando evento:`, error);
-            
-            // 👇 CAMBIO: Enviar el mensaje roto a la Dead Letter Queue (Cola de Mensajes Muertos)
-            // Esto evita que el mensaje regrese a la cola principal y sature tu base de datos cobrándote de más.
             try {
                 await receiverVentas.deadLetterMessage(mensajeRecibido, {
                     deadLetterReason: "ErrorProcesamientoBD",

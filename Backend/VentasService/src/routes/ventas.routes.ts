@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { verificarAccesoInterno, verificarRol } from '../middlewares/Security';
-import { getVentas, createVenta, actualizarEstado, buscarPorCodigoRecoleccion, confirmarEntregaLocal } from '../controllers/ventas.controller';
+import { getVentas, createVenta, actualizarEstado, buscarPorCodigoRecoleccion, confirmarEntregaLocal, procesarVentaFisica } from '../controllers/ventas.controller';
 
 const router = Router();
 
@@ -23,6 +23,8 @@ router.post('/:id_venta/entregar', verificarRol(['Cajero', 'Administrador', 'Sup
 // IMPORTANTE: Si es Venta en Línea, el Cliente necesita permiso. 
 // Si es Venta Local, el Cajero la crea. 
 router.post('/', verificarRol(['Cliente', 'Cajero', 'Administrador']), createVenta);
+// ✨ NUEVA RUTA EXCLUSIVA PARA EL PUNTO DE VENTA
+router.post('/local', verificarRol(['Cajero', 'Administrador', 'SuperAdministrador']), procesarVentaFisica);
 
 // Actualizar estado de entrega (PATCH): 
 // Esta es la que hicimos hoy, solo el Staff de tienda puede marcar como "Entregado"

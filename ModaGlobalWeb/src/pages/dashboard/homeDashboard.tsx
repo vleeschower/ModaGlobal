@@ -133,49 +133,52 @@ const DashboardHome: React.FC = () => {
           />
         </div>
 
-        {/* Acciones Rápidas */}
-        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
-          <h3 className="text-lg font-bold text-primary mb-4">Acciones rápidas</h3>
-          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-3 gap-4">
-            
-            <Link 
-              to="/inventario"
-              className="flex flex-col items-center gap-2 p-4 rounded-xl hover:bg-gray-50 transition-all group"
-            >
-              <div className="w-12 h-12 rounded-full bg-emerald-100 flex items-center justify-center group-hover:bg-emerald-200 transition-all">
-                <span className="material-symbols-outlined text-emerald-600 text-2xl">inventory_2</span>
-              </div>
-              <span className="text-sm font-medium text-gray-700">Gestionar inventario</span>
-            </Link>
-
-            {/* ✨ NUEVO BOTÓN: PUNTO DE VENTA (CAJA REGISTRADORA) ✨ */}
-            {(currentUserRole === 'Cajero' || currentUserRole === 'Administrador' || currentUserRole === 'SuperAdministrador') && (
-              <Link 
-                to="/dashboard/pos"
-                className="flex flex-col items-center gap-2 p-4 rounded-xl hover:bg-gray-50 transition-all group"
-              >
-                <div className="w-12 h-12 rounded-full bg-orange-100 flex items-center justify-center group-hover:bg-orange-200 transition-all">
-                  <span className="material-symbols-outlined text-orange-600 text-2xl">point_of_sale</span>
-                </div>
-                <span className="text-sm font-medium text-gray-700">Punto de Venta</span>
-              </Link>
-            )}
-
-            {/* BOTÓN PARA ENTREGAS OMNICANAL */}
-            {(currentUserRole === 'Cajero' || currentUserRole === 'Administrador' || currentUserRole === 'SuperAdministrador') && (
-              <Link 
-                to="/dashboard/entregas"
-                className="flex flex-col items-center gap-2 p-4 rounded-xl hover:bg-gray-50 transition-all group"
-              >
-                <div className="w-12 h-12 rounded-full bg-blue-100 flex items-center justify-center group-hover:bg-blue-200 transition-all">
-                  <span className="material-symbols-outlined text-blue-600 text-2xl">local_shipping</span>
-                </div>
-                <span className="text-sm font-medium text-gray-700">Entregar Pedidos</span>
-              </Link>
-            )}
-
-          </div>
+{/* Acciones Rápidas */}
+<div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-6">
+  <h3 className="text-lg font-bold text-primary mb-4">Acciones rápidas</h3>
+  
+  <div className="flex flex-wrap gap-4 sm:gap-6">
+    
+    {(currentUserRole === 'Administrador' || currentUserRole === 'SuperAdministrador') && (
+      <Link 
+        to="/inventario"
+        className="flex-1 flex flex-col items-center gap-2 p-4 min-w-35 rounded-xl hover:bg-gray-50 transition-all group"
+      >
+        <div className="w-12 h-12 rounded-full bg-emerald-100 flex items-center justify-center group-hover:bg-emerald-200 transition-all">
+          <span className="material-symbols-outlined text-emerald-600 text-2xl">inventory_2</span>
         </div>
+        <span className="text-sm font-medium text-gray-700 text-center">Gestionar inventario</span>
+      </Link>
+    )}
+
+    {/* ✨ NUEVO BOTÓN: PUNTO DE VENTA (CAJA REGISTRADORA) ✨ */}
+    {(currentUserRole === 'Cajero' || currentUserRole === 'Administrador' || currentUserRole === 'SuperAdministrador') && (
+      <Link 
+        to="/dashboard/pos"
+        className="flex-1 flex flex-col items-center gap-2 p-4 min-w-35 rounded-xl hover:bg-gray-50 transition-all group"
+      >
+        <div className="w-12 h-12 rounded-full bg-orange-100 flex items-center justify-center group-hover:bg-orange-200 transition-all">
+          <span className="material-symbols-outlined text-orange-600 text-2xl">point_of_sale</span>
+        </div>
+        <span className="text-sm font-medium text-gray-700 text-center">Punto de Venta</span>
+      </Link>
+    )}
+
+    {/* BOTÓN PARA ENTREGAS OMNICANAL */}
+    {(currentUserRole === 'Cajero' || currentUserRole === 'Administrador' || currentUserRole === 'SuperAdministrador') && (
+      <Link 
+        to="/dashboard/EntregasDashboard"
+        className="flex-1 flex flex-col items-center gap-2 p-4 min-w-35 rounded-xl hover:bg-gray-50 transition-all group"
+      >
+        <div className="w-12 h-12 rounded-full bg-blue-100 flex items-center justify-center group-hover:bg-blue-200 transition-all">
+          <span className="material-symbols-outlined text-blue-600 text-2xl">local_shipping</span>
+        </div>
+        <span className="text-sm font-medium text-gray-700 text-center">Entregar Pedidos</span>
+      </Link>
+    )}
+
+  </div>
+</div>
       </div>
     </DashboardLayout>
   );

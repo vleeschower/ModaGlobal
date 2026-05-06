@@ -634,4 +634,31 @@ export const apiService = {
       return { success: false, message: 'Error de red al confirmar la entrega.' };
     }
   },
+
+  // ✨ NUEVO: Procesar Venta Física (Exclusivo para Punto de Venta / Caja)
+  procesarVentaLocal: async (payload: any): Promise<ApiResponse<any>> => {
+    try {
+      if (!checkAuth()) {
+        return { success: false, message: 'No autenticado. Por favor inicia sesión.' };
+      }
+
+      const response = await fetch(`${API_BASE_URL}/api/venta/local`, {
+        method: 'POST',
+        headers: getAuthHeaders(), // Esto ya inyecta el token y la tienda automáticamente 😎
+        body: JSON.stringify(payload)
+      });
+      
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(data.error || `Error HTTP: ${response.status}`);
+      }
+
+      return { success: true, data: data };
+    } catch (error: any) {
+      console.error('Error en procesarVentaLocal:', error);
+      return { success: false, message: error.message || 'Error de red al procesar el cobro en caja.' };
+    }
+  },
 };
+
