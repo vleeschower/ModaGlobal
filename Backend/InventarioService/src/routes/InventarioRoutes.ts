@@ -7,7 +7,8 @@ import {
     obtenerSolicitudes, 
     responderSolicitud, 
     obtenerTodasTiendas,
-    obtenerTiendasPublicas
+    obtenerTiendasPublicas,
+    obtenerStockPorTienda // ✨ IMPORTACIÓN AGREGADA
 } from '../controllers/InventarioController';
 import { verificarAccesoInterno, verificarRol, verificarApiKey } from '../middlewares/Security';
 
@@ -31,6 +32,8 @@ router.get('/stock/:id_producto', consultarStock);
 // ==========================================
 router.use(verificarAccesoInterno);
 
+// ✨ NUEVA RUTA PARA EL PUNTO DE VENTA (Trae inventario específico de una sucursal)
+router.get('/tienda/:id_tienda', obtenerStockPorTienda);
 
 // ==========================================
 // 4. RUTAS PRIVADAS ESTÁTICAS (SuperAdmin / Admin)
@@ -45,13 +48,11 @@ router.post('/solicitudes', verificarRol(['Administrador']), solicitarStock);
 router.get('/solicitudes', verificarRol(['Administrador', 'SuperAdministrador']), obtenerSolicitudes);
 
 // AJUSTES MANUALES (Mermas, entradas directas)
-router.post('/ajustar', verificarRol(['Administrador', 'SuperAdministrador']), ajustarStock);
-
+router.post('/ajustar', verificarRol(['Administrador', 'SuperAdministrador', 'Cajero']), ajustarStock);
 // ==========================================
 // 5. RUTAS PRIVADAS DINÁMICAS (Llevan parámetros como :id)
 // ==========================================
 // Solo el Súper Admin aprueba o rechaza
 router.put('/solicitudes/:id_solicitud/responder', verificarRol(['SuperAdministrador']), responderSolicitud);
-
 
 export default router;

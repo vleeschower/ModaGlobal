@@ -8,7 +8,6 @@ import { publicarEvento } from '../events/EventPublisher';
 // Función utilitaria para crear pausas estratégicas en milisegundos
 const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
-
 // ==========================================
 // MÓDULO: TIENDAS / ALMACENES
 // ==========================================
@@ -177,7 +176,6 @@ export const ajustarStock = async (req: any, res: Response): Promise<void> => {
                 END CATCH
             `);
             
-        // ✨ CORRECCIÓN DE TYPESCRIPT: Forzamos el tipo a un arreglo de arreglos
         const arreglosDeResultados = result.recordsets as any[][];
         const datosFinales = arreglosDeResultados.find(rs => rs && rs.length > 0)?.[0];
         
@@ -186,9 +184,6 @@ export const ajustarStock = async (req: any, res: Response): Promise<void> => {
         if (!datosFinales || !datosFinales.id_inventario_final) {
             logger.warn("⚠️ ALERTA: SQL no devolvió el ID del inventario. El evento no se enviará.");
         } else {
-            // =========================================================================
-            // ✨ EVENTO SIMPLE: Modificaste UNA tienda, mandas evento de UNA tienda
-            // =========================================================================
             await publicarEvento('STOCK_ACTUALIZADO', {
                 id_inventario: datosFinales.id_inventario_final,
                 id_tienda: id_tienda,
@@ -234,7 +229,6 @@ export const obtenerTiendas = async (req: any, res: Response): Promise<void> => 
 // MÓDULO: SOLICITUDES DE STOCK (WORKFLOW)
 // ==========================================
 
-// 1. Administrador solicita stock
 export const solicitarStock = async (req: any, res: Response): Promise<void> => {
     try {
         const { id_producto, cantidad } = req.body;
@@ -272,7 +266,6 @@ export const solicitarStock = async (req: any, res: Response): Promise<void> => 
     }
 };
 
-// 2. Obtener solicitudes (SuperAdmin ve todas, Admin ve solo las suyas)
 export const obtenerSolicitudes = async (req: any, res: Response): Promise<void> => {
     try {
         const rolUsuario = req.usuarioRol;
@@ -288,7 +281,6 @@ export const obtenerSolicitudes = async (req: any, res: Response): Promise<void>
 
         const request = pool.request();
 
-        // Si es Administrador normal, filtramos por su tienda
         if (rolUsuario === 'Administrador') {
             query += ` WHERE s.id_tienda = @id_tienda `;
             request.input('id_tienda', id_tienda);
@@ -304,14 +296,11 @@ export const obtenerSolicitudes = async (req: any, res: Response): Promise<void>
     }
 };
 
-// 3. SuperAdministrador aprueba o rechaza
 export const responderSolicitud = async (req: any, res: Response): Promise<void> => {
-    try { // <-- ESTE ES EL TRY GENERAL (Para la Base de Datos)
+    try {
         const { id_solicitud } = req.params;
-        const { accion } = req.body; // 'APROBAR' o 'RECHAZAR'
+        const { accion } = req.body;
         const id_usuario_responde = req.usuarioTransaccion;
-        
-        // ✨ DEFINIMOS EL ID DE LA SEDE CENTRAL
         const ID_SEDE_CENTRAL = 'tnd-matriz'; 
 
         if (!['APROBAR', 'RECHAZAR'].includes(accion)) {
@@ -321,7 +310,6 @@ export const responderSolicitud = async (req: any, res: Response): Promise<void>
 
         const pool = await getConnection();
         
-        // 1. Verificamos la solicitud
         const solResult = await pool.request()
             .input('id_solicitud', id_solicitud)
             .query(`SELECT * FROM dbo.solicitudes_stock WHERE id_solicitud = @id_solicitud AND estado = 'PENDIENTE'`);
@@ -334,7 +322,6 @@ export const responderSolicitud = async (req: any, res: Response): Promise<void>
         const solicitud = solResult.recordset[0];
         const nuevoEstado = accion === 'APROBAR' ? 'APROBADA' : 'RECHAZADA';
 
-        // 2. Transacción de Respuesta
         const request = pool.request();
         request.input('id_sol', id_solicitud)
                .input('estado', nuevoEstado)
@@ -350,15 +337,12 @@ export const responderSolicitud = async (req: any, res: Response): Promise<void>
         let sqlQuery = `
             BEGIN TRY
                 BEGIN TRANSACTION;
-                
-                -- Variables de control
                 DECLARE @id_inv_sede VARCHAR(50);
                 DECLARE @stock_sede INT = 0;
         `;
 
         if (accion === 'APROBAR') {
             sqlQuery += `
-                -- 1. VERIFICAR STOCK EN LA SEDE CENTRAL
                 SELECT @id_inv_sede = id_inventario, @stock_sede = stock_disponible 
                 FROM dbo.inventarios WITH (UPDLOCK) 
                 WHERE id_tienda = @id_sede_central AND id_producto = @id_producto;
@@ -369,7 +353,6 @@ export const responderSolicitud = async (req: any, res: Response): Promise<void>
                     THROW 50003, 'Stock insuficiente en la Sede Central. La solicitud no puede ser aprobada.', 1;
                 END
 
-                -- 2. DESCONTAR DE LA SEDE CENTRAL (SALIDA)
                 UPDATE dbo.inventarios 
                 SET stock_disponible = stock_disponible - @cantidad, updated_at = SYSUTCDATETIME() 
                 WHERE id_inventario = @id_inv_sede;
@@ -377,7 +360,6 @@ export const responderSolicitud = async (req: any, res: Response): Promise<void>
                 INSERT INTO dbo.movimientos_inventario (id_movimiento, id_inventario, tipo_movimiento, cantidad, id_referencia, created_by)
                 VALUES (@id_movimiento_salida, @id_inv_sede, 'TRASLADO_SALIDA', -@cantidad, @id_sol, @id_usr_resp);
 
-                -- 3. AUMENTAR A LA SUCURSAL (ENTRADA)
                 DECLARE @id_inv_sucursal VARCHAR(50);
                 SELECT @id_inv_sucursal = id_inventario FROM dbo.inventarios WITH (UPDLOCK) WHERE id_tienda = @id_tienda AND id_producto = @id_producto;
                 
@@ -421,12 +403,8 @@ export const responderSolicitud = async (req: any, res: Response): Promise<void>
             END CATCH
         `;
 
-        // EJECUTAMOS LA TRANSACCIÓN
         await request.query(sqlQuery);
 
-        // =========================================================================
-        // 3. EVENTOS SERVICE BUS (Lógica de Consistencia Eventual No Bloqueante)
-        // =========================================================================
         if (accion === 'APROBAR') {
             try { 
                 const stockSucursal = await pool.request()
@@ -439,7 +417,6 @@ export const responderSolicitud = async (req: any, res: Response): Promise<void>
                     .input('id_p', solicitud.id_producto)
                     .query(`SELECT id_inventario, stock_disponible FROM dbo.inventarios WHERE id_tienda = @id_t AND id_producto = @id_p`);
                 
-                // ✨ TU SOLUCIÓN: Empaquetamos a la Matriz y a la Sucursal en un solo envío
                 await publicarEvento('STOCK_ACTUALIZADO_DUAL', {
                     id_producto: solicitud.id_producto,
                     matriz: {
@@ -460,10 +437,9 @@ export const responderSolicitud = async (req: any, res: Response): Promise<void>
             } 
         }
 
-        // RESPUESTA AL CLIENTE (Siempre se envía si la BD fue exitosa)
         res.status(200).json({ success: true, message: `Solicitud ${nuevoEstado} exitosamente.` });
 
-    } catch (error: any) { // <-- ESTE ES EL CATCH GENERAL (Atrapa los THROW de la BD)
+    } catch (error: any) {
         if (error.number === 50002) {
             res.status(409).json({ error: error.message });
         } else if (error.number === 50003) {
@@ -473,10 +449,9 @@ export const responderSolicitud = async (req: any, res: Response): Promise<void>
             logger.error('Error respondiendo solicitud:', error);
             res.status(500).json({ error: 'Fallo interno al procesar la respuesta.' });
         }
-    } // <-- Cierra el CATCH GENERAL
+    }
 };
 
-// GET: Obtener todas las tiendas con paginación y filtros
 export const obtenerTodasTiendas = async (req: any, res: Response): Promise<void> => {
     try {
         const rolUsuario = req.usuarioRol;
@@ -493,7 +468,6 @@ export const obtenerTodasTiendas = async (req: any, res: Response): Promise<void
         const pool = await getConnection();
         const request = pool.request();
 
-        // Construcción dinámica del WHERE
         let whereClause = "WHERE deleted_at IS NULL";
         
         if (rolUsuario === 'Administrador' || rolUsuario === 'Cajero') {
@@ -512,10 +486,7 @@ export const obtenerTodasTiendas = async (req: any, res: Response): Promise<void
         }
 
         const query = `
-            -- Contador total (Recordset 0)
             SELECT COUNT(*) as total_registros FROM dbo.tiendas ${whereClause};
-
-            -- Datos paginados (Recordset 1)
             SELECT id_tienda, nombre, region, direccion, created_at
             FROM dbo.tiendas
             ${whereClause}
@@ -528,10 +499,7 @@ export const obtenerTodasTiendas = async (req: any, res: Response): Promise<void
             .input('limit', safeLimit)
             .query(query);
 
-        // ✨ LA SOLUCIÓN: Castear a any[] para evitar el error de TypeScript
         const recordsets = result.recordsets as any[];
-        
-        // Extracción segura (con fallbacks por si SQL no devuelve nada)
         const totalRegistrosRow = recordsets[0] ? recordsets[0][0] : null;
         const totalRecords = totalRegistrosRow ? totalRegistrosRow.total_registros : 0;
         const tiendas = recordsets[1] || [];
@@ -556,9 +524,6 @@ export const obtenerTodasTiendas = async (req: any, res: Response): Promise<void
 export const obtenerTiendasPublicas = async (req: Request, res: Response): Promise<void> => {
     try {
         const pool = await getConnection();
-        
-        // ✨ SÚPER OPTIMIZADO: Solo traemos id_tienda y nombre
-        // Quitamos columnas inexistentes y validamos solo con deleted_at
         const result = await pool.request().query(`
             SELECT id_tienda, nombre 
             FROM dbo.tiendas 
@@ -566,16 +531,31 @@ export const obtenerTiendasPublicas = async (req: Request, res: Response): Promi
             ORDER BY nombre ASC;
         `);
 
-        res.status(200).json({ 
-            success: true, 
-            data: result.recordset 
-        });
+        res.status(200).json({ success: true, data: result.recordset });
 
     } catch (error) {
         logger.error('Error al obtener la lista de tiendas públicas:', error);
-        res.status(500).json({ 
-            success: false, 
-            error: 'No se pudieron cargar las sucursales.' 
-        });
+        res.status(500).json({ success: false, error: 'No se pudieron cargar las sucursales.' });
+    }
+};
+
+// ✨ NUEVA FUNCIÓN PARA EL PUNTO DE VENTA (CAJERO)
+export const obtenerStockPorTienda = async (req: Request, res: Response): Promise<void> => {
+    try {
+        const { id_tienda } = req.params;
+        const pool = await getConnection();
+        
+        const result = await pool.request()
+            .input('id_tienda', id_tienda)
+            .query(`
+                SELECT id_producto, stock_disponible AS stock_actual 
+                FROM dbo.inventarios 
+                WHERE id_tienda = @id_tienda AND stock_disponible > 0
+            `);
+
+        res.status(200).json({ success: true, data: result.recordset });
+    } catch (error) {
+        logger.error(`Error obteniendo stock de tienda ${req.params.id_tienda}`, error);
+        res.status(500).json({ error: 'Error interno al cargar el stock local' });
     }
 };

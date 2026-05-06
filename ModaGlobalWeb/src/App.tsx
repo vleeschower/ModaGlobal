@@ -10,6 +10,7 @@ import Home from "./pages/home";
 import Catalogo from './pages/Catalogo';
 import ProductDetails from './pages/ProductDetails';
 import Cart from './pages/Cart'; // Viene de la rama de Rogelio
+import Ticket from './pages/Ticket'; // ✨ NUEVA IMPORTACIÓN DEL TICKET
 
 // Páginas de Cliente
 import Profile from "./pages/PerfilCliente";
@@ -24,6 +25,8 @@ import PromocionesAdmin from './pages/dashboard/PromocionesAdmin';
 import Inventario from './pages/inventario';
 import SolicitudesStock from './pages/dashboard/SolicitudesStock';
 import TiendasDashboard from './pages/dashboard/TiendasDashboard';
+import EntregasDashboard from './pages/dashboard/EntregasDashboard'; 
+import PosDashboard from './pages/dashboard/PosDashboard'; // ✨ NUEVA IMPORTACIÓN DEL PUNTO DE VENTA
 
 function App() {
   return (
@@ -43,6 +46,9 @@ function App() {
             
             {/* Ruta del carrito (Rogelio) */}
             <Route path="/carrito" element={<Cart />} />
+            
+            {/* ✨ NUEVA RUTA DEL TICKET ✨ */}
+            <Route path="/ticket" element={<Ticket />} />
 
             {/* ========================================== */}
             {/* 2. RUTAS DE CLIENTE (Compradores)          */}
@@ -59,6 +65,20 @@ function App() {
             <Route path="/dashboard" element={
               <ProtectedRoute allowedRoles={['SuperAdministrador', 'Administrador', 'Cajero']}>
                 <HomeDashboard />
+              </ProtectedRoute>
+            } />
+
+            {/* ✨ NUEVA RUTA DE PUNTO DE VENTA (POS) ✨ */}
+            <Route path="/dashboard/pos" element={
+              <ProtectedRoute allowedRoles={['SuperAdministrador', 'Administrador', 'Cajero']}>
+                <PosDashboard />
+              </ProtectedRoute>
+            } />
+
+            {/* ✨ RUTA DE ENTREGAS OMNICANAL ✨ */}
+            <Route path="/dashboard/entregas" element={
+              <ProtectedRoute allowedRoles={['SuperAdministrador', 'Administrador', 'Cajero']}>
+                <EntregasDashboard />
               </ProtectedRoute>
             } />
             

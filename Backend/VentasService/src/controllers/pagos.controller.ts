@@ -14,22 +14,23 @@ const openpay = new Openpay(
 
 export const procesarPagoCheckout = async (req: Request, res: Response) => {
     try {
-        const id_usuario = (req as any).usuarioTransaccion;
-        const { tokenId, deviceSessionId, totalFront } = req.body;
+        // Obtenemos los datos de autenticación del middleware
+        const id_usuario = (req as any).usuarioTransaccion || (req as any).user?.id;
+        
+        // Recibimos la tienda exacta desde React
+        const { tokenId, deviceSessionId, totalFront, id_tienda } = req.body;
 
         // ================================================================
-        // 🏪 LÓGICA MAESTRA DE SUCURSAL (Temporalmente al azar para pruebas)
+        // 🏪 ASIGNACIÓN DE TIENDA REAL
         // ================================================================
         const idTiendaToken = (req as any).usuarioTiendaId; 
-        const idTiendaFrontend = req.body.id_tienda; 
+        
+        // Priorizamos la tienda seleccionada en React. Si falla, usa la del token.
+        const id_tienda_final = id_tienda || idTiendaToken;
 
-        // Como aún no tenemos el selector en React, ponemos tus sucursales y lanzamos los dados
-        const tiendasDisponibles = ['tnd-chiapas-01', 'tnd-chiapas-02', 'SUC-CENTRO-01'];
-        const tiendaAlAzar = tiendasDisponibles[Math.floor(Math.random() * tiendasDisponibles.length)];
-
-        // Si tiene en BD, la usa. Si la mandas de React, la usa. Si no, le toca una al azar.
-        const id_tienda_final = idTiendaToken || idTiendaFrontend || tiendaAlAzar;
-        // ================================================================
+        if (!id_tienda_final) {
+            return res.status(400).json({ success: false, message: 'No se detectó una tienda válida para la compra.' });
+        }
 
         if (!tokenId || !deviceSessionId) {
             return res.status(400).json({ success: false, message: 'Faltan credenciales de pago' });
@@ -52,13 +53,13 @@ export const procesarPagoCheckout = async (req: Request, res: Response) => {
         const totalACobrar = parseFloat(totalFront);
 
         // ================================================================
-        // 🔥 EL CRUCE CON PRODUCTOSERVICE (Usando fetch nativo)
+        // 🔥 EL CRUCE CON PRODUCTOSERVICE (Para obtener los precios reales)
         // ================================================================
         const idsProductos = itemsCarrito.map(item => item.id_producto);
         let infoProductos: any[] = [];
         
         try {
-            const response = await fetch(`${process.env.API_GATEWAY_URL || 'http://localhost:3000'}/api/productos/detalles-multiples`, {
+            const response = await fetch(`${process.env.API_GATEWAY_URL || 'http://127.0.0.1:3000'}/api/productos/detalles-multiples`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
@@ -83,7 +84,7 @@ export const procesarPagoCheckout = async (req: Request, res: Response) => {
             method: 'card',
             amount: totalACobrar,
             currency: 'MXN',
-            description: `Compra en ModaGlobal - Carrito ${carrito.id_carrito}`,
+            description: `Compra en ModaGlobal - Carrito ${carrito.id_carrito} - Sucursal: ${id_tienda_final}`,
             device_session_id: deviceSessionId,
             customer: {
                 name: 'Cliente',
@@ -106,21 +107,23 @@ export const procesarPagoCheckout = async (req: Request, res: Response) => {
 
             // 🔥 ¡PAGO APROBADO EN OPENPAY! 🔥
             try {
+                let nuevaVentaData: any = null;
+                let detallesVentaData: any[] = [];
+                let subtotalReal = 0;
+                let impuestosReal = 0;
+                let codigoRecoleccionTemp = `REC-${crypto.randomUUID().substring(0, 6).toUpperCase()}`;
+
                 await prisma.$transaction(async (tx) => {
                     
-                    // MATEMÁTICA Y LOGÍSTICA PARA EL TICKET
-                    const subtotalReal = parseFloat((totalACobrar / 1.16).toFixed(2));
-                    const impuestosReal = parseFloat((totalACobrar - subtotalReal).toFixed(2));
-                    const codigoRecoleccionTemp = `REC-${crypto.randomUUID().substring(0, 6).toUpperCase()}`;
+                    subtotalReal = parseFloat((totalACobrar / 1.16).toFixed(2));
+                    impuestosReal = parseFloat((totalACobrar - subtotalReal).toFixed(2));
 
-                    // a) Creamos la Venta Principal
+                    // a) Creamos la Venta Principal con la Tienda Exacta
                     const nuevaVenta = await tx.ventas.create({
                         data: {
                             id_venta: `VTA-${crypto.randomUUID()}`,
                             id_usuario: id_usuario,
-                            
-                            id_tienda: id_tienda_final, // 👈 Se asignará la que haya salido en la ruleta
-                            
+                            id_tienda: id_tienda_final, 
                             canal: 'WEB', 
                             total: totalACobrar,
                             subtotal: subtotalReal,         
@@ -129,11 +132,11 @@ export const procesarPagoCheckout = async (req: Request, res: Response) => {
                             estado: 'COMPLETADA'
                         }
                     });
+                    nuevaVentaData = nuevaVenta;
 
                     // b) Pasamos items a DetalleVenta
                     const detallesVenta = itemsCarrito.map(item => {
                         const productoReal = infoProductos.find(p => p.id_producto === item.id_producto);
-                        
                         return {
                             id_detalle: `DET-${crypto.randomUUID()}`,
                             id_venta: nuevaVenta.id_venta,
@@ -143,6 +146,7 @@ export const procesarPagoCheckout = async (req: Request, res: Response) => {
                             nombre_producto_snapshot: productoReal ? productoReal.nombre : 'Producto Desconocido' 
                         };
                     });
+                    detallesVentaData = detallesVenta;
                     
                     await tx.detalleVenta.createMany({ data: detallesVenta });
 
@@ -158,20 +162,16 @@ export const procesarPagoCheckout = async (req: Request, res: Response) => {
                         }
                     });
 
-                    // d) Actualizamos estado del Carrito
+                    // d) Actualizamos estado del Carrito y vaciamos items
                     await tx.carrito.update({
                         where: { id_carrito: carrito.id_carrito },
                         data: { estado: 'PAGADO' }
                     });
-
-                    // e) Vaciamos items del carrito
                     await tx.carritoItem.deleteMany({
                         where: { id_carrito: carrito.id_carrito }
                     });
 
-                    // ================================================================
-                    // 🔥 f) REGISTRO DE AUDITORÍA (LOGS)
-                    // ================================================================
+                    // e) LOGS de auditoría
                     await tx.auditoriaVentas.create({
                         data: {
                             id_auditoria: `LOG-${Date.now()}`,
@@ -181,13 +181,65 @@ export const procesarPagoCheckout = async (req: Request, res: Response) => {
                             id_usuario: id_usuario 
                         }
                     });
-                    // ================================================================
                 });
 
-                // Respondemos con victoria
+                // ================================================================
+                // 📦 LLAMADA A INVENTARIO SERVICE (ELEVACIÓN DE PRIVILEGIOS)
+                // ================================================================
+                try {
+                    const promesasInventario = itemsCarrito.map(item => {
+                        // Saltamos el Gateway y vamos directo a la puerta trasera del Inventario (3001)
+                        return fetch(`http://127.0.0.1:3001/ajustar`, {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json',
+                                'x-api-key': process.env.INTERNAL_API_KEY || 'clave-secreta-interna-modaglobal',
+                                'x-user-id': id_usuario,
+                                // ✨ LA MAGIA OCURRE AQUÍ: Nos ponemos la máscara de SuperAdministrador
+                                'x-user-rol': 'SuperAdministrador' 
+                            },
+                            body: JSON.stringify({ 
+                                id_tienda: id_tienda_final, 
+                                id_producto: item.id_producto,
+                                cantidad: -item.cantidad, // Negativo para restar
+                                tipo_movimiento: 'VENTA',
+                                id_referencia: nuevaVentaData.id_venta 
+                            })
+                        }).then(async (res) => {
+                            if (!res.ok) {
+                                const errorData = await res.text();
+                                console.error(`❌ INVENTARIO RECHAZÓ EL PRODUCTO ${item.id_producto}. Código ${res.status}:`, errorData);
+                            } else {
+                                console.log(`✅ STOCK DESCONTADO PERFECTAMENTE: ${item.id_producto} en ${id_tienda_final}`);
+                            }
+                        });
+                    });
+
+                    Promise.all(promesasInventario).catch(err => console.error("Error en lote de inventario:", err));
+
+                } catch (e) {
+                    console.error("Error armando la petición de inventario:", e);
+                }
+                // ================================================================
+
+                // ✨ Respondemos con victoria y enviamos los datos para el Ticket de React ✨
                 return res.status(200).json({ 
                     success: true, 
-                    message: '¡Pago procesado y guardado con éxito!'
+                    message: '¡Pago procesado y guardado con éxito!',
+                    ticket: {
+                        id_venta: nuevaVentaData.id_venta,
+                        codigo_recoleccion: codigoRecoleccionTemp,
+                        fecha: new Date().toISOString(),
+                        tienda: id_tienda_final,
+                        subtotal: subtotalReal,
+                        impuestos: impuestosReal,
+                        total: totalACobrar,
+                        items: detallesVentaData.map(d => ({
+                            nombre: d.nombre_producto_snapshot,
+                            cantidad: d.cantidad,
+                            precio: d.precio_unitario
+                        }))
+                    }
                 });
 
             } catch (dbError) {

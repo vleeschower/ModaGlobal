@@ -40,7 +40,6 @@ const limitadorSeguridad = rateLimit({
         res.status(429).json({ error: 'Demasiadas peticiones. Acceso restringido por 5 minutos.' });
     },
     skipSuccessfulRequests: false, 
-    // 👇 LA MAGIA QUE AGREGAMOS 👇
     skip: (req) => {
         // Si la petición viene de tu propia computadora (localhost en IPv4 o IPv6), ignora el límite
         return req.ip === '::1' || req.ip === '127.0.0.1' || req.ip === '::ffff:127.0.0.1';
@@ -48,45 +47,45 @@ const limitadorSeguridad = rateLimit({
 });
 
 // ==========================================================
-// 2. CONFIGURACIÓN DE PROXYS
+// 2. CONFIGURACIÓN DE PROXYS (Preparados para la nube y sin bug 504)
 // ==========================================================
 const inventarioProxyOptions: Options = {
-    target: 'http://localhost:3001',
+    target: process.env.INVENTARIO_SERVICE_URL || 'http://127.0.0.1:3001',
     changeOrigin: true,
     pathRewrite: { '^/api/inventario': '' },
     on: { proxyReq: (proxyReq, req, _res) => configurarHeadersSeguridad(proxyReq as ClientRequest, req as AuthRequest) }
 };
 
 const productoProxyOptions: Options = {
-    target: 'http://localhost:3002',
+    target: process.env.PRODUCTO_SERVICE_URL || 'http://127.0.0.1:3002',
     changeOrigin: true,
     pathRewrite: { '^/api/productos': '' },
     on: { proxyReq: (proxyReq, req, _res) => configurarHeadersSeguridad(proxyReq as ClientRequest, req as AuthRequest) }
 };
 
 const usuarioProxyOptions: Options = {
-    target: 'http://localhost:3003',
+    target: process.env.USUARIO_SERVICE_URL || 'http://127.0.0.1:3022',
     changeOrigin: true,
     pathRewrite: { '^/api/usuarios': '' },
     on: { proxyReq: (proxyReq, req, _res) => configurarHeadersSeguridad(proxyReq as ClientRequest, req as AuthRequest) }
 };
 
 const ventaProxyOptions: Options = {
-    target: 'http://localhost:3004',
+    target: process.env.VENTAS_SERVICE_URL || 'http://127.0.0.1:3003',
     changeOrigin: true,
     pathRewrite: { '^/api/ventas': '' },
     on: { proxyReq: (proxyReq, req, _res) => configurarHeadersSeguridad(proxyReq as ClientRequest, req as AuthRequest) }
 };
 
 const carritoProxyOptions: Options = {
-    target: 'http://localhost:3004',
+    target: process.env.VENTAS_SERVICE_URL || 'http://127.0.0.1:3003',
     changeOrigin: true,
     on: { proxyReq: (proxyReq, req, _res) => configurarHeadersSeguridad(proxyReq as ClientRequest, req as AuthRequest) }
 };
 
 // Proxy para los pagos, apuntando al VentasService (3003)
 const pagoProxyOptions: Options = {
-    target: 'http://localhost:3003',
+    target: process.env.VENTAS_SERVICE_URL || 'http://127.0.0.1:3003',
     changeOrigin: true,
     on: { proxyReq: (proxyReq, req, _res) => configurarHeadersSeguridad(proxyReq as ClientRequest, req as AuthRequest) }
 };

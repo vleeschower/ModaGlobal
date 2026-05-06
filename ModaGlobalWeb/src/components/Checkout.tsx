@@ -29,6 +29,9 @@ const Checkout: React.FC = () => {
     e.preventDefault();
     setLoading(true);
 
+    // ✨ 1. Extraemos la tienda real que el cliente eligió en el Navbar (o la matriz por defecto)
+    const idTiendaSeleccionada = localStorage.getItem('mg_tienda_seleccionada') || 'tnd-matriz';
+
     const requestData = {
       "holder_name": tarjeta.nombre,
       "card_number": tarjeta.numero.replace(/\s/g, ''), 
@@ -42,17 +45,25 @@ const Checkout: React.FC = () => {
       (response: any) => {
         const tokenId = response.data.id;
         
-        // 🛒 Mandamos el ID de la sucursal (Temporalmente quemado para la prueba, luego lo harás dinámico)
-        apiService.procesarPago(tokenId, deviceSessionId.current, totalPrice)
+        // ✨ 2. Mandamos la tienda como 4to parámetro al API
+        apiService.procesarPago(tokenId, deviceSessionId.current, totalPrice, idTiendaSeleccionada)
           .then(async (res) => {
             if (res.success) {
+              
+              // ✨ 3. FIX DE TYPESCRIPT: Usamos (res as any) para que TS no llore por la propiedad ticket
+              if ((res as any).ticket) {
+                localStorage.setItem('mg_ultimo_ticket', JSON.stringify((res as any).ticket));
+              }
+
               Swal.fire({
                 icon: 'success',
                 title: '¡Pago Exitoso!',
-                text: 'Tu pedido ha sido confirmado y guardado.',
+                text: 'Tu pedido ha sido confirmado.',
+                confirmButtonColor: '#002727'
               }).then(async () => {
                  await clearCart(); 
-                 window.location.href = '/catalogo'; 
+                 // ✨ 4. Redirigimos a la nueva vista del ticket en lugar del catálogo
+                 window.location.href = '/ticket'; 
               });
             } else {
               Swal.fire('Error en el servidor', res.message, 'error');
@@ -77,9 +88,6 @@ const Checkout: React.FC = () => {
     setTarjeta({ ...tarjeta, [e.target.name]: e.target.value });
   };
 
-  // =========================================================================
-  // 🎨 AQUÍ EMPIEZA LA NUEVA UI CLÁSICA TIPO OPENPAY
-  // =========================================================================
   return (
     <div className="max-w-4xl mx-auto mt-10 bg-white shadow-md border border-gray-200">
       
@@ -93,7 +101,6 @@ const Checkout: React.FC = () => {
         <div className="flex flex-col md:flex-row gap-8 mb-8 pb-6 border-b border-gray-200">
           <div className="flex-1">
             <p className="text-sm text-gray-600 font-semibold mb-3">Tarjetas de crédito</p>
-            {/* Aquí puedes cambiar estos span por etiquetas <img> con los logos reales */}
             <div className="flex gap-2 items-center text-xs font-bold text-blue-900">
               <span className="px-2 py-1 border rounded">VISA</span>
               <span className="px-2 py-1 border rounded text-red-600">MasterCard</span>
@@ -165,7 +172,6 @@ const Checkout: React.FC = () => {
                   className="w-32 p-2 border border-gray-300 rounded-sm outline-none focus:border-blue-500 text-gray-600 placeholder-gray-400 italic" 
                   placeholder="3 dígitos"
                 />
-                {/* Iconos simulados de tarjeta para el CVV */}
                 <div className="hidden sm:flex gap-2 opacity-50">
                   <div className="w-12 h-8 bg-gray-300 rounded border border-gray-400 flex items-center justify-end px-1">
                      <span className="w-4 h-1 bg-gray-500 rounded-full"></span>
@@ -180,8 +186,6 @@ const Checkout: React.FC = () => {
 
           {/* FOOTER OPENPAY Y BOTÓN */}
           <div className="flex flex-col md:flex-row justify-between items-center mt-10 pt-6 border-t border-gray-200">
-            
-            {/* Logos de seguridad */}
             <div className="flex items-center gap-6 mb-4 md:mb-0">
               <div className="text-center">
                 <p className="text-[10px] text-gray-500 uppercase tracking-wide">Transacciones realizadas vía:</p>
@@ -194,7 +198,6 @@ const Checkout: React.FC = () => {
               </div>
             </div>
 
-            {/* Botón Pagar */}
             <button 
               type="submit" 
               disabled={loading || cart.length === 0}

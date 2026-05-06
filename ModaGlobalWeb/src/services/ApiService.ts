@@ -56,7 +56,6 @@ const getToken = (): string | null => {
   return token;
 };
 
-// 4. Función Helper para inyectar el Token en las peticiones
 // 4. Función Helper para inyectar el Token y la TIENDA en las peticiones
 const getAuthHeaders = (): HeadersInit => {
   const headers: Record<string, string> = {
@@ -184,8 +183,6 @@ export const apiService = {
     }
   },
 
-  // En src/services/api.service.ts (dentro de apiService)
-
   // Obtener solicitudes de stock
   getSolicitudesStock: async (): Promise<ApiResponse<any[]>> => {
     try {
@@ -213,7 +210,6 @@ export const apiService = {
     }
   },
 
-  // En apiService dentro de ApiService.ts
   getTiendasPaginadas: async (page = 1, search = '', region = ''): Promise<ApiResponse<any[]>> => {
     try {
       // Cambiamos /admin/lista por /tiendas
@@ -239,7 +235,7 @@ export const apiService = {
     }
   },
 
- // OBTENER INVENTARIO EN RED (Paginado para el nuevo Dashboard de Inventarios)
+  // OBTENER INVENTARIO EN RED (Paginado para el nuevo Dashboard de Inventarios)
   getInventarioRed: async (page: number = 1, limit: number = 10, search: string = '', sort: string = 'newest'): Promise<ApiResponse<any[]>> => {
     try {
       if (!checkAuth()) {
@@ -282,13 +278,11 @@ export const apiService = {
     }
   },
 
-// -- SERVICIO DE PRODUCTOS --
+  // -- SERVICIO DE PRODUCTOS --
   getProductos: async (page: number = 1, limit: number = 12): Promise<ApiResponse<Producto[]>> => {
     try {
       const response = await fetch(`${API_BASE_URL}/api/productos?page=${page}&limit=${limit}`, {
         method: 'GET',
-        // Seguimos enviando getAuthHeaders() por si hay un token, pero si no lo hay, 
-        // fetch enviará la petición vacía y el backend lo dejará pasar.
         headers: getAuthHeaders(), 
       });
       
@@ -303,8 +297,6 @@ export const apiService = {
 
   getProductoById: async (id: string): Promise<ApiResponse<Producto>> => {
     try {
-      // 🚨 ELIMINAMOS el bloque de checkAuth() porque cualquiera puede ver un producto
-
       const response = await fetch(`${API_BASE_URL}/api/productos/${id}`, {
         method: 'GET',
         headers: getAuthHeaders(),
@@ -343,8 +335,7 @@ export const apiService = {
     }
   },
 
-  // Añadir a apiService
-getProductosBatch: async (ids: string[]): Promise<ApiResponse<Producto[]>> => {
+  getProductosBatch: async (ids: string[]): Promise<ApiResponse<Producto[]>> => {
     try {
         const response = await fetch(`${API_BASE_URL}/api/productos/batch`, {
             method: 'POST',
@@ -355,7 +346,7 @@ getProductosBatch: async (ids: string[]): Promise<ApiResponse<Producto[]>> => {
     } catch (error) {
         return { success: false, message: 'Error de red al hidratar el carrito.' };
     }
-},
+  },
 
   getResena: async (id: string): Promise<ApiResponse<Producto>> => {
     try {
@@ -380,7 +371,6 @@ getProductosBatch: async (ids: string[]): Promise<ApiResponse<Producto[]>> => {
     }
   },
 
-  // Flujo para crear reseñas
   crearResena: async (id_producto: string, calificacion: number, comentario: string): Promise<ApiResponse<any>> => {
     try {
       if (!checkAuth()) {
@@ -410,8 +400,6 @@ getProductosBatch: async (ids: string[]): Promise<ApiResponse<Producto[]>> => {
     }
   },
 
-  // ✨ ACTUALIZADO: Soporte para Identificador de Imagen Principal y Eliminación
-// ✨ ACTUALIZADO: Soporte total para Galería Dinámica
   saveProductoCompleto: async (form: any, specs: any[], images: File[], mainImageId?: string, mainImageIndex?: number, imagesToDelete?: string[]): Promise<ApiResponse<any>> => {
     try {
       if (!checkAuth()) {
@@ -463,7 +451,6 @@ getProductosBatch: async (ids: string[]): Promise<ApiResponse<Producto[]>> => {
     }
   },
 
-  // OBTENER CATEGORÍAS
   getCategorias: async (): Promise<ApiResponse<any[]>> => {
     try {
       const response = await fetch(`${API_BASE_URL}/api/productos/categorias`, {
@@ -482,7 +469,6 @@ getProductosBatch: async (ids: string[]): Promise<ApiResponse<Producto[]>> => {
     }
   },
 
-  // ELIMINAR PRODUCTO
   eliminarProducto: async (idProducto: string): Promise<ApiResponse<any>> => {
     try {
       if (!checkAuth()) {
@@ -505,9 +491,6 @@ getProductosBatch: async (ids: string[]): Promise<ApiResponse<Producto[]>> => {
     }
   },
 
-  // ==========================================
-  // SERVICIO DE PROMOCIONES (MÓDULO ADMIN)
-  // ==========================================
   getPromocionesAdmin: async (page: number = 1, limit: number = 10, search: string = '', sort: string = 'newest'): Promise<ApiResponse<PromocionAdmin[]>> => {
     try {
       const url = `${API_BASE_URL}/api/productos/promociones/admin?page=${page}&limit=${limit}&search=${encodeURIComponent(search)}&sort=${sort}`;
@@ -521,13 +504,11 @@ getProductosBatch: async (ids: string[]): Promise<ApiResponse<Producto[]>> => {
     }
   },
 
-  // En api.service.ts
   guardarPromocion: async (id_producto: string, descuento: number, fecha_inicio: string, fecha_fin: string, id_tienda?: string): Promise<ApiResponse<any>> => {
     try {
       const response = await fetch(`${API_BASE_URL}/api/productos/promociones/admin/guardar`, {
         method: 'POST',
         headers: getAuthHeaders(),
-        // ✨ Agregamos id_tienda al body por si el SuperAdmin lo necesita
         body: JSON.stringify({ id_producto, descuento, fecha_inicio, fecha_fin, id_tienda }) 
       });
       return await response.json();
@@ -536,9 +517,6 @@ getProductosBatch: async (ids: string[]): Promise<ApiResponse<Producto[]>> => {
     }
   },
 
-// SERVICIO DE CARRITO (BASE DE DATOS)
-// ==========================================
-  
   getCarrito: async (): Promise<ApiResponse<any>> => {
     try {
       if (!checkAuth()) return { success: false, message: 'No autenticado.' };
@@ -577,7 +555,6 @@ getProductosBatch: async (ids: string[]): Promise<ApiResponse<Producto[]>> => {
       const response = await fetch(`${API_BASE_URL}/api/carrito/sync`, {
         method: 'POST',
         headers: getAuthHeaders(),
-        // Enviamos el arreglo completo que estaba guardado en LocalStorage
         body: JSON.stringify({ items }) 
       });
       return await response.json();
@@ -617,15 +594,16 @@ getProductosBatch: async (ids: string[]): Promise<ApiResponse<Producto[]>> => {
     }
   },
 
-  procesarPago: async (tokenId: string, deviceSessionId: string, totalFront: number): Promise<ApiResponse<any>> => {
+  // ✨ AQUÍ LE AGREGAMOS LA TIENDA A LA PETICIÓN ✨
+  procesarPago: async (tokenId: string, deviceSessionId: string, totalFront: number, id_tienda: string): Promise<ApiResponse<any>> => {
     try {
       if (!checkAuth()) return { success: false, message: 'No autenticado.' };
       
-    const response = await fetch(`${API_BASE_URL}/api/pagos/checkout`, {
-      method: 'POST',
-      headers: getAuthHeaders(),
-      body: JSON.stringify({ tokenId, deviceSessionId, totalFront })
-    });
+      const response = await fetch(`${API_BASE_URL}/api/pagos/checkout`, {
+        method: 'POST',
+        headers: getAuthHeaders(),
+        body: JSON.stringify({ tokenId, deviceSessionId, totalFront, id_tienda })
+      });
       return await response.json();
     } catch (error: any) {
       console.error('Error al procesar pago:', error);
