@@ -26,7 +26,7 @@ const Header: React.FC<HeaderProps> = ({ toggleSidebar }) => {
 
   const navLinks = [
     { name: 'Catálogo', href: '/catalogo' },
-    { name: 'Ofertas', href: '/ofertas' },
+    // { name: 'Ofertas', href: '/ofertas' },
   ];
 
   // ✨ CARGAMOS LAS TIENDAS AL MONTAR EL HEADER
